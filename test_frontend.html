@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 mb-8">Frontend Feature Test</h1>
+        
+        <div class="space-y-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Backend Status</h2>
+                <div id="backend-status" class="text-sm">
+                    Testing backend connectivity...
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">API Endpoints Test</h2>
+                <div id="api-test-results" class="space-y-2 text-sm">
+                    Testing API endpoints...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://127.0.0.1:8000";
+        
+        async function testBackend() {
+            const statusDiv = document.getElementById('backend-status');
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/data/duplicates_summary`);
+                if (response.ok) {
+                    statusDiv.innerHTML = '<span class="text-green-600">✅ Backend is running and accessible</span>';
+                } else {
+                    statusDiv.innerHTML = '<span class="text-yellow-600">⚠️ Backend responded but no data loaded</span>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="text-red-600">❌ Backend connection failed</span>';
+            }
+        }
+        
+        async function testEndpoints() {
+            const resultsDiv = document.getElementById('api-test-results');
+            resultsDiv.innerHTML = '';
+            
+            const endpoints = [
+                { name: 'Duplicates Summary', url: '/api/data/duplicates_summary', method: 'GET' },
+                { name: 'Data Profile', url: '/api/data/profile', method: 'GET' },
+                { name: 'Change Type', url: '/api/data/change_type', method: 'POST', body: { column_name: 'test', new_type: 'object' } }
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const options = {
+                        method: endpoint.method,
+                        headers: { 'Content-Type': 'application/json' }
+                    };
+                    
+                    if (endpoint.body) {
+                        options.body = JSON.stringify(endpoint.body);
+                    }
+                    
+                    const response = await fetch(`${API_BASE_URL}${endpoint.url}`, options);
+                    const status = response.ok ? '✅' : '❌';
+                    const statusText = response.ok ? 'Working' : `Failed (${response.status})`;
+                    
+                    resultsDiv.innerHTML += `
+                        <div class="flex justify-between items-center">
+                            <span>${endpoint.name}:</span>
+                            <span class="${response.ok ? 'text-green-600' : 'text-red-600'}">${status} ${statusText}</span>
+                        </div>
+                    `;
+                } catch (error) {
+                    resultsDiv.innerHTML += `
+                        <div class="flex justify-between items-center">
+                            <span>${endpoint.name}:</span>
+                            <span class="text-red-600">❌ Error</span>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', () => {
+            testBackend();
+            setTimeout(testEndpoints, 1000);
+        });
+    </script>
+</body>
+</html> 

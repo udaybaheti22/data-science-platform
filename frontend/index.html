@@ -1,0 +1,2644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Science Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        html { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const API_BASE_URL = "http://127.0.0.1:8001";
+
+        // Reusable Components
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-xl shadow-md overflow-hidden ${className}`}>
+                <div className="p-6">{children}</div>
+            </div>
+        );
+
+        const Button = ({ children, onClick, variant = "primary", className = "", disabled = false }) => {
+            const baseClasses = "font-semibold py-3 px-6 rounded-lg transition duration-300 disabled:opacity-50";
+            const variants = {
+                primary: "bg-blue-600 text-white hover:bg-blue-700",
+                secondary: "bg-gray-200 text-gray-800 hover:bg-gray-300",
+                outline: "border-2 border-blue-600 text-blue-600 hover:bg-blue-50",
+                success: "bg-green-600 text-white hover:bg-green-700"
+            };
+            
+            return (
+                <button onClick={onClick} className={`${baseClasses} ${variants[variant]} ${className}`} disabled={disabled}>
+                    {children}
+                </button>
+            );
+        };
+
+        // Dataset Preview Component
+        const DatasetPreview = ({ data, columns, totalRows, totalColumns }) => {
+            if (!data || data.length === 0) {
+                return (
+                    <div className="text-center py-12">
+                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <span className="text-3xl">📊</span>
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h3>
+                        <p className="text-gray-600">Please upload a dataset to see the preview.</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Dataset Preview</h2>
+                        <div className="text-sm text-gray-600">
+                            Showing {data.length} of {totalRows} rows • {totalColumns} columns
+                        </div>
+                    </div>
+                    
+                    <div className="table-container">
+                        <table className="w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    {columns.map((column, index) => (
+                                        <th key={index} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            {column}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {data.map((row, rowIndex) => (
+                                    <tr key={rowIndex} className="hover:bg-gray-50">
+                                        {columns.map((column, colIndex) => (
+                                            <td key={colIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {row[column]}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // Sidebar Component
+        const Sidebar = ({ currentStage, onStageChange, project }) => {
+                    const stages = [
+            { id: 'preview', name: 'Preview', icon: '📊' },
+            { id: 'profile', name: 'Automated Profile', icon: '📄' },
+            { id: 'data', name: 'Data', icon: '📝' },
+            { id: 'clean', name: 'Clean', icon: '🧹' },
+            { id: 'analyze', name: 'Analyze', icon: '📈' },
+            { id: 'buildModel', name: 'Build Model', icon: '🤖' },
+            { id: 'logs', name: 'Logs', icon: '📝' },
+            { id: 'export', name: 'Export', icon: '📤' }
+        ];
+
+            return (
+                <div className="w-64 bg-white shadow-lg min-h-screen">
+                    <div className="p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Project: {project?.name}</h2>
+                        <nav className="space-y-2">
+                            {stages.map((stage) => (
+                                <button
+                                    key={stage.id}
+                                    onClick={() => onStageChange(stage.id)}
+                                    className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                                        currentStage === stage.id
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <span className="mr-3">{stage.icon}</span>
+                                    {stage.name}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+                </div>
+            );
+        };
+
+        // Upload Stage Component
+        const UploadStage = ({ onUpload, isLoading, error }) => {
+            const [selectedFile, setSelectedFile] = useState(null);
+            const [uploading, setUploading] = useState(false);
+
+            const handleFileSelect = (event) => {
+                const file = event.target.files[0];
+                setSelectedFile(file);
+            };
+
+            const handleUpload = async () => {
+                if (!selectedFile) return;
+                
+                setUploading(true);
+                try {
+                    await onUpload(selectedFile);
+                } catch (error) {
+                    console.error('Upload error:', error);
+                } finally {
+                    setUploading(false);
+                }
+            };
+
+            return (
+                <div className="max-w-2xl mx-auto">
+                    <div className="text-center mb-8">
+                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <span className="text-4xl">📁</span>
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Dataset</h2>
+                        <p className="text-gray-600">Upload a CSV file to get started with your data analysis</p>
+                    </div>
+
+                    <Card>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Select CSV File
+                                </label>
+                                <input
+                                    type="file"
+                                    accept=".csv"
+                                    onChange={handleFileSelect}
+                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                            </div>
+
+                            {error && (
+                                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                                    <p className="text-sm text-red-600">{error}</p>
+                                </div>
+                            )}
+
+                            <Button
+                                onClick={handleUpload}
+                                disabled={!selectedFile || uploading}
+                                className="w-full"
+                            >
+                                {uploading ? 'Uploading...' : 'Upload Dataset'}
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Data Stage Component
+        const DataStage = ({ onSave }) => {
+            const [columnInfo, setColumnInfo] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [successMessage, setSuccessMessage] = useState('');
+            const [changingType, setChangingType] = useState(false);
+            const [renamingColumn, setRenamingColumn] = useState(false);
+
+            useEffect(() => {
+                loadColumnInfo();
+            }, []);
+
+            const loadColumnInfo = async () => {
+                try {
+                    setLoading(true);
+                    const response = await fetch(`${API_BASE_URL}/api/data/profile`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setColumnInfo(data.column_info || []);
+                    } else {
+                        setError('Failed to load column information');
+                    }
+                } catch (err) {
+                    setError('Error loading column information');
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleTypeChange = async (columnName, newType) => {
+                try {
+                    setChangingType(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/change_type`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            column_name: columnName,
+                            new_type: newType
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(result.message);
+                        
+                        // Refresh column info
+                        await loadColumnInfo();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to change column type');
+                    }
+                } catch (err) {
+                    setError('Error changing column type');
+                    console.error('Error:', err);
+                } finally {
+                    setChangingType(false);
+                }
+            };
+
+            const handleColumnRename = async (oldColumnName, newColumnName) => {
+                try {
+                    setRenamingColumn(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/rename_column`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            old_column_name: oldColumnName,
+                            new_column_name: newColumnName
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(result.message);
+                        
+                        // Refresh column info
+                        await loadColumnInfo();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to rename column');
+                    }
+                } catch (err) {
+                    setError('Error renaming column');
+                    console.error('Error:', err);
+                } finally {
+                    setRenamingColumn(false);
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-gray-900">Data Management</h2>
+                            <Button onClick={onSave} variant="success">
+                                Save Changes
+                            </Button>
+                        </div>
+                        <Card>
+                            <div className="flex justify-center py-8">
+                                <div className="loader"></div>
+                            </div>
+                        </Card>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Data Management</h2>
+                        <Button onClick={onSave} variant="success">
+                            Save Changes
+                        </Button>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                            <p className="text-sm text-red-600">{error}</p>
+                        </div>
+                    )}
+
+                    {successMessage && (
+                        <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                            <p className="text-sm text-green-600">{successMessage}</p>
+                        </div>
+                    )}
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Column Types</h3>
+                        <p className="text-sm text-gray-600 mb-6">
+                            Manage the data types of your columns. Select a new type from the dropdown to convert the column.
+                        </p>
+                        
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Column Name
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Current Type
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Non-Null Count
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Change Type
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {columnInfo.map((column, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                {column.Column}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {column.Dtype}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {column['Non-Null Count']}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <select
+                                                    onChange={(e) => {
+                                                        if (e.target.value) {
+                                                            handleTypeChange(column.Column, e.target.value);
+                                                        }
+                                                    }}
+                                                    disabled={changingType}
+                                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select Type</option>
+                                                    <option value="object">Text (object)</option>
+                                                    <option value="int64">Integer (int64)</option>
+                                                    <option value="float64">Decimal (float64)</option>
+                                                    <option value="datetime64[ns]">Date/Time (datetime64[ns])</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Column Renaming</h3>
+                        <p className="text-sm text-gray-600 mb-6">
+                            Rename columns to make them more descriptive or consistent with your naming conventions.
+                        </p>
+                        
+                        <div className="space-y-4">
+                            {columnInfo.map((column, index) => (
+                                <div key={index} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                                    <div className="flex-1">
+                                        <span className="font-medium text-gray-900">{column.Column}</span>
+                                        <span className="text-sm text-gray-600 ml-2">
+                                            ({column.Dtype})
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="text"
+                                            placeholder="New name..."
+                                            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                                            disabled={renamingColumn}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const newName = e.target.value.trim();
+                                                    if (newName && newName !== column.Column) {
+                                                        handleColumnRename(column.Column, newName);
+                                                        e.target.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            onClick={(e) => {
+                                                const input = e.target.previousElementSibling;
+                                                const newName = input.value.trim();
+                                                if (newName && newName !== column.Column) {
+                                                    handleColumnRename(column.Column, newName);
+                                                    input.value = '';
+                                                }
+                                            }}
+                                            variant="outline"
+                                            className="text-sm py-2 px-4"
+                                            disabled={renamingColumn}
+                                        >
+                                            {renamingColumn ? 'Renaming...' : 'Rename'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Clean Stage Component
+        const CleanStage = ({ onSave }) => {
+            const [missingSummary, setMissingSummary] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [selectedActions, setSelectedActions] = useState({});
+            const [applying, setApplying] = useState(false);
+            const [successMessage, setSuccessMessage] = useState('');
+            const [selectedColumns, setSelectedColumns] = useState([]);
+            const [showMultipleSelect, setShowMultipleSelect] = useState(false);
+            const [bulkAction, setBulkAction] = useState('');
+            const [historyLength, setHistoryLength] = useState(0);
+            const [allColumns, setAllColumns] = useState([]);
+            const [selectedColumnsToDrop, setSelectedColumnsToDrop] = useState([]);
+            const [droppingColumns, setDroppingColumns] = useState(false);
+            const [duplicateCount, setDuplicateCount] = useState(0);
+            const [duplicateLimit, setDuplicateLimit] = useState('');
+            const [removingDuplicates, setRemovingDuplicates] = useState(false);
+            const [categoricalColumns, setCategoricalColumns] = useState([]);
+            const [selectedCategoricalColumns, setSelectedCategoricalColumns] = useState([]);
+            const [encodingColumns, setEncodingColumns] = useState(false);
+            const [numericalColumns, setNumericalColumns] = useState([]);
+            const [selectedNumericalColumns, setSelectedNumericalColumns] = useState([]);
+            const [scalingMethod, setScalingMethod] = useState('');
+            const [scalingColumns, setScalingColumns] = useState(false);
+
+            // Load missing summary when component mounts
+            useEffect(() => {
+                loadMissingSummary();
+                loadHistoryLength();
+                loadAllColumns();
+                loadDuplicateCount();
+                loadCategoricalColumns();
+                loadNumericalColumns();
+            }, []);
+
+            const loadHistoryLength = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/history-length`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setHistoryLength(data.history_length);
+                    }
+                } catch (err) {
+                    console.error('Error loading history length:', err);
+                }
+            };
+
+            const loadAllColumns = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/preview`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setAllColumns(data.columns || []);
+                    }
+                } catch (err) {
+                    console.error('Error loading columns:', err);
+                }
+            };
+
+            const loadDuplicateCount = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/duplicates_summary`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setDuplicateCount(data.duplicate_count || 0);
+                    }
+                } catch (err) {
+                    console.error('Error loading duplicate count:', err);
+                }
+            };
+
+            const loadCategoricalColumns = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/profile`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        const categoricalCols = data.column_info
+                            .filter(col => col.Dtype === 'object' || col.Dtype === 'category')
+                            .map(col => col.Column);
+                        setCategoricalColumns(categoricalCols);
+                    }
+                } catch (err) {
+                    console.error('Error loading categorical columns:', err);
+                }
+            };
+
+            const loadNumericalColumns = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/profile`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        const numericalCols = data.column_info
+                            .filter(col => col.Dtype === 'int64' || col.Dtype === 'float64')
+                            .map(col => col.Column);
+                        setNumericalColumns(numericalCols);
+                    }
+                } catch (err) {
+                    console.error('Error loading numerical columns:', err);
+                }
+            };
+
+            const handleRemoveAllDuplicates = async () => {
+                try {
+                    setRemovingDuplicates(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            operations: [{
+                                type: 'remove_duplicates'
+                            }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Successfully removed all duplicate rows! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Refresh data
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        await loadDuplicateCount();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to remove duplicates');
+                    }
+                } catch (err) {
+                    setError('Error removing duplicates');
+                    console.error('Error:', err);
+                } finally {
+                    setRemovingDuplicates(false);
+                }
+            };
+
+            const handleRemoveLimitedDuplicates = async () => {
+                if (!duplicateLimit || isNaN(parseInt(duplicateLimit))) {
+                    setError('Please enter a valid number');
+                    return;
+                }
+
+                try {
+                    setRemovingDuplicates(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            operations: [{
+                                type: 'remove_duplicates',
+                                limit: parseInt(duplicateLimit)
+                            }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Successfully removed ${duplicateLimit} duplicate rows! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Clear the input
+                        setDuplicateLimit('');
+                        
+                        // Refresh data
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        await loadDuplicateCount();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to remove duplicates');
+                    }
+                } catch (err) {
+                    setError('Error removing duplicates');
+                    console.error('Error:', err);
+                } finally {
+                    setRemovingDuplicates(false);
+                }
+            };
+
+            const handleCategoricalColumnToggle = (columnName) => {
+                setSelectedCategoricalColumns(prev => 
+                    prev.includes(columnName) 
+                        ? prev.filter(col => col !== columnName)
+                        : [...prev, columnName]
+                );
+            };
+
+            const handleNumericalColumnToggle = (columnName) => {
+                setSelectedNumericalColumns(prev => 
+                    prev.includes(columnName) 
+                        ? prev.filter(col => col !== columnName)
+                        : [...prev, columnName]
+                );
+            };
+
+            const handleOneHotEncoding = async () => {
+                if (selectedCategoricalColumns.length === 0) {
+                    setError('Please select at least one categorical column');
+                    return;
+                }
+
+                try {
+                    setEncodingColumns(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            operations: [{
+                                type: 'one_hot_encode',
+                                columns: selectedCategoricalColumns
+                            }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Successfully applied one-hot encoding to ${selectedCategoricalColumns.length} column(s)! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Clear selection
+                        setSelectedCategoricalColumns([]);
+                        
+                        // Refresh all data
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        await loadDuplicateCount();
+                        await loadCategoricalColumns();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to apply one-hot encoding');
+                    }
+                } catch (err) {
+                    setError('Error applying one-hot encoding');
+                    console.error('Error:', err);
+                } finally {
+                    setEncodingColumns(false);
+                }
+            };
+
+            const handleLabelEncoding = async () => {
+                if (selectedCategoricalColumns.length === 0) {
+                    setError('Please select at least one categorical column');
+                    return;
+                }
+
+                try {
+                    setEncodingColumns(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            operations: [{
+                                type: 'label_encode',
+                                columns: selectedCategoricalColumns
+                            }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Successfully applied label encoding to ${selectedCategoricalColumns.length} column(s)! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Clear selection
+                        setSelectedCategoricalColumns([]);
+                        
+                        // Refresh all data
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        await loadDuplicateCount();
+                        await loadCategoricalColumns();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to apply label encoding');
+                    }
+                } catch (err) {
+                    setError('Error applying label encoding');
+                    console.error('Error:', err);
+                } finally {
+                    setEncodingColumns(false);
+                }
+            };
+
+            const handleFeatureScaling = async () => {
+                if (selectedNumericalColumns.length === 0) {
+                    setError('Please select at least one numerical column');
+                    return;
+                }
+
+                if (!scalingMethod) {
+                    setError('Please select a scaling method');
+                    return;
+                }
+
+                try {
+                    setScalingColumns(true);
+                    setError('');
+                    setSuccessMessage('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            operations: [{
+                                type: 'scale',
+                                method: scalingMethod,
+                                columns: selectedNumericalColumns
+                            }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        const methodName = scalingMethod === 'standard' ? 'standard scaling' : 'minmax scaling';
+                        setSuccessMessage(`Successfully applied ${methodName} to ${selectedNumericalColumns.length} column(s)! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Clear selection and method
+                        setSelectedNumericalColumns([]);
+                        setScalingMethod('');
+                        
+                        // Refresh all data
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        await loadDuplicateCount();
+                        await loadCategoricalColumns();
+                        await loadNumericalColumns();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to apply feature scaling');
+                    }
+                } catch (err) {
+                    setError('Error applying feature scaling');
+                    console.error('Error:', err);
+                } finally {
+                    setScalingColumns(false);
+                }
+            };
+
+            const handleUndo = async () => {
+                try {
+                    setApplying(true);
+                    const response = await fetch(`${API_BASE_URL}/api/data/undo`);
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Undo successful! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Refresh all data including duplicate count
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        await loadDuplicateCount();
+                        await loadCategoricalColumns();
+                        await loadNumericalColumns();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to undo');
+                    }
+                } catch (err) {
+                    setError('Error performing undo');
+                    console.error('Error:', err);
+                } finally {
+                    setApplying(false);
+                }
+            };
+
+            const loadMissingSummary = async () => {
+                try {
+                    setLoading(true);
+                    const response = await fetch(`${API_BASE_URL}/api/data/missing_summary`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setMissingSummary(data);
+                        // Initialize selected actions
+                        const actions = {};
+                        data.forEach(item => {
+                            if (item.missing_count > 0) {
+                                actions[item.column_name] = '';
+                            }
+                        });
+                        setSelectedActions(actions);
+                    } else {
+                        setError('Failed to load missing value summary');
+                    }
+                } catch (err) {
+                    setError('Error loading missing value summary');
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleActionChange = (columnName, action) => {
+                setSelectedActions(prev => ({
+                    ...prev,
+                    [columnName]: action
+                }));
+            };
+
+            const handleColumnToggle = (columnName) => {
+                setSelectedColumns(prev => 
+                    prev.includes(columnName) 
+                        ? prev.filter(col => col !== columnName)
+                        : [...prev, columnName]
+                );
+            };
+
+            const handleBulkActionApply = () => {
+                if (bulkAction && selectedColumns.length > 0) {
+                    const newActions = { ...selectedActions };
+                    selectedColumns.forEach(columnName => {
+                        newActions[columnName] = bulkAction;
+                    });
+                    setSelectedActions(newActions);
+                    setSelectedColumns([]);
+                    setBulkAction('');
+                    setShowMultipleSelect(false);
+                }
+            };
+
+            const handleColumnToDropToggle = (columnName) => {
+                setSelectedColumnsToDrop(prev => 
+                    prev.includes(columnName) 
+                        ? prev.filter(col => col !== columnName)
+                        : [...prev, columnName]
+                );
+            };
+
+            const handleDropColumns = async () => {
+                if (selectedColumnsToDrop.length === 0) {
+                    setError('Please select at least one column to drop');
+                    return;
+                }
+
+                try {
+                    setDroppingColumns(true);
+                    setError('');
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            operations: [{
+                                type: 'drop_columns',
+                                columns: selectedColumnsToDrop
+                            }]
+                        })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Successfully dropped ${selectedColumnsToDrop.length} column(s)! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Clear selection
+                        setSelectedColumnsToDrop([]);
+                        
+                        // Refresh data
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to drop columns');
+                    }
+                } catch (err) {
+                    setError('Error dropping columns');
+                    console.error('Error:', err);
+                } finally {
+                    setDroppingColumns(false);
+                }
+            };
+
+            const handleApply = async () => {
+                try {
+                    setApplying(true);
+                    setSuccessMessage('');
+
+                    // Prepare operations based on selected actions
+                    const operations = [];
+                    
+                    Object.entries(selectedActions).forEach(([columnName, action]) => {
+                        if (action && action !== 'Select Action') {
+                            if (action === 'Drop Rows') {
+                                operations.push({
+                                    type: 'fill_missing',
+                                    method: 'drop',
+                                    columns: [columnName]
+                                });
+                            } else {
+                                const method = action.toLowerCase().replace('fill with ', '');
+                                operations.push({
+                                    type: 'fill_missing',
+                                    method: method,
+                                    columns: [columnName]
+                                });
+                            }
+                        }
+                    });
+
+                    if (operations.length === 0) {
+                        setError('Please select at least one action');
+                        return;
+                    }
+
+                    const response = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ operations })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        setSuccessMessage(`Successfully cleaned dataset! Rows: ${result.rows}, Columns: ${result.columns}`);
+                        setHistoryLength(result.history_length);
+                        
+                        // Refresh missing summary
+                        await loadMissingSummary();
+                        await loadAllColumns();
+                        
+                        // Clear selected actions
+                        setSelectedActions({});
+                        
+                        // Call onSave to update project state
+                        await onSave();
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to clean dataset');
+                    }
+                } catch (err) {
+                    setError('Error applying cleaning operations');
+                    console.error('Error:', err);
+                } finally {
+                    setApplying(false);
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-gray-900">Data Cleaning</h2>
+                            <Button onClick={onSave} variant="success">
+                                Save Changes
+                            </Button>
+                        </div>
+                        <Card>
+                            <div className="flex justify-center py-8">
+                                <div className="loader"></div>
+                            </div>
+                        </Card>
+                    </div>
+                );
+            }
+
+            const columnsWithMissing = missingSummary.filter(item => item.missing_count > 0);
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Data Cleaning</h2>
+                        <div className="flex space-x-3">
+                            <Button 
+                                onClick={handleUndo} 
+                                variant="secondary" 
+                                disabled={historyLength === 0 || applying}
+                            >
+                                {applying ? 'Undoing...' : 'Undo Last Action'}
+                            </Button>
+                            <Button onClick={onSave} variant="success">
+                                Save Changes
+                            </Button>
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                            <p className="text-sm text-red-600">{error}</p>
+                        </div>
+                    )}
+
+                    {successMessage && (
+                        <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                            <p className="text-sm text-green-600">{successMessage}</p>
+                        </div>
+                    )}
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Duplicate Data</h3>
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Found {duplicateCount} duplicate rows in your dataset.
+                            </p>
+                            
+                            <div className="flex items-center space-x-4">
+                                <Button
+                                    onClick={handleRemoveAllDuplicates}
+                                    disabled={removingDuplicates || duplicateCount === 0}
+                                    variant="primary"
+                                >
+                                    {removingDuplicates ? 'Removing...' : 'Remove All Duplicates'}
+                                </Button>
+                                
+                                <div className="flex items-center space-x-2">
+                                    <input
+                                        type="number"
+                                        value={duplicateLimit}
+                                        onChange={(e) => setDuplicateLimit(e.target.value)}
+                                        placeholder="Enter number"
+                                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-24"
+                                        min="1"
+                                        max={duplicateCount}
+                                    />
+                                    <Button
+                                        onClick={handleRemoveLimitedDuplicates}
+                                        disabled={removingDuplicates || !duplicateLimit || parseInt(duplicateLimit) <= 0 || parseInt(duplicateLimit) > duplicateCount}
+                                        variant="secondary"
+                                    >
+                                        {removingDuplicates ? 'Removing...' : 'Remove Amount'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Drop Columns</h3>
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Select columns to remove from your dataset:
+                            </p>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {allColumns.map((column) => (
+                                    <div key={column} className="flex items-center space-x-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedColumnsToDrop.includes(column)}
+                                            onChange={() => handleColumnToDropToggle(column)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        />
+                                        <label className="text-sm text-gray-700">{column}</label>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="flex justify-end pt-4">
+                                <Button
+                                    onClick={handleDropColumns}
+                                    disabled={droppingColumns || selectedColumnsToDrop.length === 0}
+                                    variant="primary"
+                                >
+                                    {droppingColumns ? 'Dropping...' : `Drop Selected (${selectedColumnsToDrop.length})`}
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Categorical Encoding</h3>
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Select categorical columns to encode for machine learning:
+                            </p>
+                            
+                            {categoricalColumns.length === 0 ? (
+                                <div className="text-center py-6">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-xl">📊</span>
+                                    </div>
+                                    <p className="text-gray-600">No categorical columns found.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {categoricalColumns.map((column) => (
+                                            <div key={column} className="flex items-center space-x-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedCategoricalColumns.includes(column)}
+                                                    onChange={() => handleCategoricalColumnToggle(column)}
+                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                />
+                                                <label className="text-sm text-gray-700">{column}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-4 pt-4">
+                                        <Button
+                                            onClick={handleOneHotEncoding}
+                                            disabled={encodingColumns || selectedCategoricalColumns.length === 0}
+                                            variant="success"
+                                        >
+                                            {encodingColumns ? 'Encoding...' : 'Apply One-Hot Encoding to Selected'}
+                                        </Button>
+                                        
+                                        <div className="flex items-center space-x-2">
+                                            <Button
+                                                onClick={handleLabelEncoding}
+                                                disabled={encodingColumns || selectedCategoricalColumns.length === 0}
+                                                variant="secondary"
+                                            >
+                                                {encodingColumns ? 'Encoding...' : 'Apply Label Encoding to Selected'}
+                                            </Button>
+                                            <div className="flex items-center space-x-1 text-xs text-yellow-600">
+                                                <span>⚠️</span>
+                                                <span>Warning: Creates an artificial order. Best for ordinal data.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Missing Values Summary</h3>
+                        
+                        {columnsWithMissing.length === 0 ? (
+                            <div className="text-center py-8">
+                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-2xl">✅</span>
+                                </div>
+                                <p className="text-gray-600">No missing values found in your dataset!</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Found {columnsWithMissing.length} column(s) with missing values. Select actions to handle them:
+                                </p>
+
+                                {/* Multiple Selection Controls */}
+                                <div className="bg-blue-50 p-4 rounded-lg">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="font-medium text-blue-900">Multiple Column Selection</span>
+                                        <button
+                                            onClick={() => setShowMultipleSelect(!showMultipleSelect)}
+                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                        >
+                                            {showMultipleSelect ? 'Hide' : 'Show'} Multiple Select
+                                        </button>
+                                    </div>
+                                    
+                                    {showMultipleSelect && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center space-x-3">
+                                                <select
+                                                    value={bulkAction}
+                                                    onChange={(e) => setBulkAction(e.target.value)}
+                                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select Bulk Action</option>
+                                                    <option value="Fill with Mean">Fill with Mean</option>
+                                                    <option value="Fill with Median">Fill with Median</option>
+                                                    <option value="Fill with Mode">Fill with Mode</option>
+                                                    <option value="Drop Rows">Drop Rows</option>
+                                                </select>
+                                                <Button
+                                                    onClick={handleBulkActionApply}
+                                                    disabled={!bulkAction || selectedColumns.length === 0}
+                                                    variant="primary"
+                                                    className="text-sm py-2 px-4"
+                                                >
+                                                    Apply to Selected ({selectedColumns.length})
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    {columnsWithMissing.map((item) => (
+                                        <div key={item.column_name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div className="flex items-center space-x-3">
+                                                {showMultipleSelect && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedColumns.includes(item.column_name)}
+                                                        onChange={() => handleColumnToggle(item.column_name)}
+                                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                    />
+                                                )}
+                                                <div className="flex-1">
+                                                    <span className="font-medium text-gray-900">{item.column_name}</span>
+                                                    <span className="text-sm text-gray-600 ml-2">
+                                                        ({item.missing_count} missing values)
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <select
+                                                    value={selectedActions[item.column_name] || ''}
+                                                    onChange={(e) => handleActionChange(item.column_name, e.target.value)}
+                                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select Action</option>
+                                                    <option value="Fill with Mean">Fill with Mean</option>
+                                                    <option value="Fill with Median">Fill with Median</option>
+                                                    <option value="Fill with Mode">Fill with Mode</option>
+                                                    <option value="Drop Rows">Drop Rows</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex justify-end pt-4">
+                                    <Button
+                                        onClick={handleApply}
+                                        disabled={applying || Object.values(selectedActions).every(action => !action || action === 'Select Action')}
+                                        variant="primary"
+                                    >
+                                        {applying ? 'Applying...' : 'Apply Changes'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </Card>
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Feature Scaling</h3>
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Scale numerical features to improve machine learning model performance. Select columns and choose a scaling method:
+                            </p>
+                            
+                            <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                                <div className="text-sm text-blue-800">
+                                    <p className="font-medium mb-2">Scaling Methods:</p>
+                                    <ul className="space-y-1 text-xs">
+                                        <li><strong>Standard Scaler:</strong> Centers data around mean=0 with standard deviation=1. Good for algorithms sensitive to feature scales.</li>
+                                        <li><strong>MinMax Scaler:</strong> Scales data to range [0,1]. Good for algorithms that expect bounded input values.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            {numericalColumns.length === 0 ? (
+                                <div className="text-center py-6">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-xl">📊</span>
+                                    </div>
+                                    <p className="text-gray-600">No numerical columns found for scaling.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {numericalColumns.map((column) => (
+                                            <div key={column} className="flex items-center space-x-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedNumericalColumns.includes(column)}
+                                                    onChange={() => handleNumericalColumnToggle(column)}
+                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                />
+                                                <label className="text-sm text-gray-700">{column}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-4 pt-4">
+                                        <select
+                                            value={scalingMethod}
+                                            onChange={(e) => setScalingMethod(e.target.value)}
+                                            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Select Scaling Method</option>
+                                            <option value="standard">Standard Scaler (Standardization)</option>
+                                            <option value="minmax">MinMax Scaler (Normalization)</option>
+                                        </select>
+                                        
+                                        <Button
+                                            onClick={handleFeatureScaling}
+                                            disabled={scalingColumns || selectedNumericalColumns.length === 0 || !scalingMethod}
+                                            variant="success"
+                                        >
+                                            {scalingColumns ? 'Scaling...' : 'Apply Scaling to Selected'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Profile Stage Component
+        const ProfileStage = ({ onSave }) => {
+            const [reportHtml, setReportHtml] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const generateReport = async () => {
+                try {
+                    setLoading(true);
+                    setError(null);
+                    
+                    const response = await fetch(`${API_BASE_URL}/api/data/profile_report`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setReportHtml(data.report_html);
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to generate profile report');
+                    }
+                } catch (err) {
+                    setError('Error generating profile report');
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Automated Data Profile</h2>
+                        <Button onClick={onSave} variant="success">
+                            Save Changes
+                        </Button>
+                    </div>
+                    
+                    <Card>
+                        <div className="space-y-4">
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Comprehensive Data Analysis Report</h3>
+                                <p className="text-gray-600 mb-4">
+                                    Generate a detailed automated profile report that includes dataset overview, 
+                                    column analysis, statistical summaries, and data quality insights.
+                                </p>
+                                
+                                <Button
+                                    onClick={generateReport}
+                                    disabled={loading}
+                                    variant="primary"
+                                    className="mb-4"
+                                >
+                                    {loading ? 'Generating Report...' : 'Generate Full Data Profile Report'}
+                                </Button>
+                            </div>
+
+                            {error && (
+                                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                                    <p className="text-sm text-red-600">{error}</p>
+                                </div>
+                            )}
+
+                            {reportHtml && (
+                                <div className="mt-6">
+                                    <h4 className="text-md font-semibold text-gray-900 mb-3">Generated Report:</h4>
+                                    <iframe
+                                        srcDoc={reportHtml}
+                                        className="w-full h-screen border rounded-md"
+                                        title="Data Profile Report"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Analyze Stage Component
+        const AnalyzeStage = ({ onSave }) => {
+            const [plotType, setPlotType] = useState('');
+            const [selectedColumns, setSelectedColumns] = useState({});
+            const [sortByFrequency, setSortByFrequency] = useState(false);
+            const [maxDataPoints, setMaxDataPoints] = useState(2000);
+            const [plotData, setPlotData] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [numericalColumns, setNumericalColumns] = useState([]);
+            const [categoricalColumns, setCategoricalColumns] = useState([]);
+
+            useEffect(() => {
+                loadColumns();
+            }, []);
+
+            const loadColumns = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/profile`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setNumericalColumns(data.numerical_columns || []);
+                        
+                        // Get categorical columns from column info
+                        const catCols = data.column_info
+                            .filter(col => col.Dtype === 'object' || col.Dtype === 'category')
+                            .map(col => col.Column);
+                        setCategoricalColumns(catCols);
+                    }
+                } catch (err) {
+                    console.error('Error loading columns:', err);
+                }
+            };
+
+            const generatePlot = async () => {
+                try {
+                    setLoading(true);
+                    setError(null);
+                    setPlotData(null);
+
+                    let endpoint = '';
+                    let params = {};
+
+                    switch (plotType) {
+                        case 'histogram':
+                            if (!selectedColumns.histogram) {
+                                setError('Please select a column for histogram');
+                                return;
+                            }
+                            endpoint = `/api/visualize/histogram/${selectedColumns.histogram}`;
+                            break;
+
+                        case 'barchart':
+                            if (!selectedColumns.barchart) {
+                                setError('Please select a column for bar chart');
+                                return;
+                            }
+                            endpoint = `/api/visualize/barchart?column=${selectedColumns.barchart}&sort_by=${sortByFrequency ? 'frequency' : 'value'}`;
+                            break;
+
+                        case 'scatter':
+                            if (!selectedColumns.xAxis || !selectedColumns.yAxis) {
+                                setError('Please select both X and Y axis columns');
+                                return;
+                            }
+                            let scatterParams = `x_col=${selectedColumns.xAxis}&y_col=${selectedColumns.yAxis}&sample_size=${maxDataPoints}`;
+                            if (selectedColumns.colorAxis) {
+                                scatterParams += `&color_col=${selectedColumns.colorAxis}`;
+                            }
+                            endpoint = `/api/visualize/scatter?${scatterParams}`;
+                            break;
+
+                        case 'scatter3d':
+                            if (!selectedColumns.xAxis3D || !selectedColumns.yAxis3D || !selectedColumns.zAxis3D) {
+                                setError('Please select X, Y, and Z axis columns');
+                                return;
+                            }
+                            endpoint = `/api/visualize/scatter3d?x_col=${selectedColumns.xAxis3D}&y_col=${selectedColumns.yAxis3D}&z_col=${selectedColumns.zAxis3D}&sample_size=${maxDataPoints}`;
+                            break;
+
+                        case 'correlation':
+                            endpoint = '/api/visualize/correlation';
+                            break;
+
+                        default:
+                            setError('Please select a plot type');
+                            return;
+                    }
+
+                    const response = await fetch(`${API_BASE_URL}${endpoint}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setPlotData(data);
+                    } else {
+                        const errorData = await response.json();
+                        setError(errorData.detail || 'Failed to generate plot');
+                    }
+                } catch (err) {
+                    setError('Error generating plot');
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const renderPlot = () => {
+                if (!plotData) return null;
+
+                // Simple chart rendering with better error handling
+                const renderChart = () => {
+                    try {
+                        console.log('Starting chart rendering...', { plotType, plotData });
+                        
+                        // Check if Chart.js is available
+                        if (typeof Chart === 'undefined') {
+                            console.error('Chart.js not loaded');
+                            return <div className="text-red-600">Chart.js library not loaded. Please refresh the page.</div>;
+                        }
+
+                        // Destroy any existing charts
+                        const existingCanvas = document.getElementById('chartCanvas');
+                        if (existingCanvas) {
+                            existingCanvas.remove();
+                        }
+
+                        // Create new canvas
+                        const chartContainer = document.getElementById('chartContainer');
+                        if (!chartContainer) {
+                            console.error('Chart container not found');
+                            return <div className="text-red-600">Chart container not found</div>;
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.id = 'chartCanvas';
+                        canvas.width = 800;
+                        canvas.height = 600;
+                        chartContainer.appendChild(canvas);
+
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) {
+                            console.error('Could not get canvas context');
+                            return <div className="text-red-600">Could not create canvas context</div>;
+                        }
+
+                        // Create the actual chart based on plot type
+                        switch (plotType) {
+                            case 'histogram':
+                                new Chart(ctx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: plotData.bin_edges.slice(0, -1).map(edge => edge.toFixed(2)),
+                                        datasets: [{
+                                            label: `Histogram: ${selectedColumns.histogram}`,
+                                            data: plotData.counts,
+                                            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                                            borderColor: 'rgba(54, 162, 235, 1)',
+                                            borderWidth: 1
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            title: {
+                                                display: true,
+                                                text: `Histogram: ${selectedColumns.histogram}`
+                                            }
+                                        },
+                                        scales: {
+                                            y: {
+                                                beginAtZero: true,
+                                                title: {
+                                                    display: true,
+                                                    text: 'Frequency'
+                                                }
+                                            },
+                                            x: {
+                                                title: {
+                                                    display: true,
+                                                    text: selectedColumns.histogram
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                                break;
+
+                            case 'barchart':
+                                new Chart(ctx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: plotData.labels,
+                                        datasets: [{
+                                            label: `Bar Chart: ${selectedColumns.barchart}`,
+                                            data: plotData.values,
+                                            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                                            borderColor: 'rgba(75, 192, 192, 1)',
+                                            borderWidth: 1
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            title: {
+                                                display: true,
+                                                text: `Bar Chart: ${selectedColumns.barchart}`
+                                            }
+                                        },
+                                        scales: {
+                                            y: {
+                                                beginAtZero: true,
+                                                title: {
+                                                    display: true,
+                                                    text: 'Count'
+                                                }
+                                            },
+                                            x: {
+                                                title: {
+                                                    display: true,
+                                                    text: selectedColumns.barchart
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                                break;
+
+                                                    case 'scatter':
+                            // Check if we have color data for color-coded scatter plot
+                            if (plotData.color && plotData.color_col) {
+                                // Create color-coded scatter plot with multiple datasets
+                                const uniqueColors = [...new Set(plotData.color)];
+                                const datasets = uniqueColors.map(colorValue => {
+                                    const colorIndices = plotData.color.map((c, i) => c === colorValue ? i : -1).filter(i => i !== -1);
+                                    const xData = colorIndices.map(i => plotData.x[i]);
+                                    const yData = colorIndices.map(i => plotData.y[i]);
+                                    
+                                    // Create meaningful label for the color group
+                                    let label = `${plotData.color_col} = ${colorValue}`;
+                                    if (plotData.color_col === 'placed') {
+                                        label = colorValue === 1 ? 'Placed' : 'Not Placed';
+                                    }
+                                    
+                                    // Use different colors for different groups
+                                    const colors = ['rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(255, 205, 86, 0.8)', 'rgba(75, 192, 192, 0.8)'];
+                                    const colorIndex = uniqueColors.indexOf(colorValue) % colors.length;
+                                    
+                                    return {
+                                        label: label,
+                                        data: xData.map((x, i) => ({ x: x, y: yData[i] })),
+                                        backgroundColor: colors[colorIndex],
+                                        borderColor: colors[colorIndex].replace('0.8', '1'),
+                                        pointRadius: 4
+                                    };
+                                });
+                                
+                                new Chart(ctx, {
+                                    type: 'scatter',
+                                    data: { datasets: datasets },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            title: {
+                                                display: true,
+                                                text: `Scatter Plot: ${selectedColumns.xAxis} vs ${selectedColumns.yAxis} (Color-coded by ${plotData.color_col})`
+                                            },
+                                            legend: {
+                                                display: true,
+                                                position: 'top'
+                                            }
+                                        },
+                                        scales: {
+                                            x: {
+                                                title: {
+                                                    display: true,
+                                                    text: selectedColumns.xAxis
+                                                }
+                                            },
+                                            y: {
+                                                title: {
+                                                    display: true,
+                                                    text: selectedColumns.yAxis
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            } else {
+                                // Regular scatter plot without color coding
+                                new Chart(ctx, {
+                                    type: 'scatter',
+                                    data: {
+                                        datasets: [{
+                                            label: `${selectedColumns.xAxis} vs ${selectedColumns.yAxis}`,
+                                            data: plotData.x.map((x, i) => ({ x: x, y: plotData.y[i] })),
+                                            backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                                            borderColor: 'rgba(255, 99, 132, 1)',
+                                            pointRadius: 4
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            title: {
+                                                display: true,
+                                                text: `Scatter Plot: ${selectedColumns.xAxis} vs ${selectedColumns.yAxis}`
+                                            }
+                                        },
+                                        scales: {
+                                            x: {
+                                                title: {
+                                                    display: true,
+                                                    text: selectedColumns.xAxis
+                                                }
+                                            },
+                                            y: {
+                                                title: {
+                                                    display: true,
+                                                    text: selectedColumns.yAxis
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                            break;
+
+                            case 'correlation':
+                                // Create correlation heatmap
+                                const correlationData = plotData.columns.map((col, i) => 
+                                    plotData.columns.map((col2, j) => ({
+                                        x: col,
+                                        y: col2,
+                                        v: plotData.correlation_matrix[col][col2]
+                                    }))
+                                ).flat();
+
+                                new Chart(ctx, {
+                                    type: 'scatter',
+                                    data: {
+                                        datasets: [{
+                                            label: 'Correlation Matrix',
+                                            data: correlationData,
+                                            backgroundColor: (context) => {
+                                                const value = context.parsed.v;
+                                                const alpha = Math.abs(value);
+                                                return value >= 0 
+                                                    ? `rgba(75, 192, 192, ${alpha})`
+                                                    : `rgba(255, 99, 132, ${alpha})`;
+                                            },
+                                            pointRadius: 8
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            title: {
+                                                display: true,
+                                                text: 'Correlation Heatmap'
+                                            },
+                                            tooltip: {
+                                                callbacks: {
+                                                    label: (context) => {
+                                                        return `Correlation: ${context.parsed.v.toFixed(3)}`;
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: {
+                                            x: {
+                                                title: { display: true, text: 'Column 1' }
+                                            },
+                                            y: {
+                                                title: { display: true, text: 'Column 2' }
+                                            }
+                                        }
+                                    }
+                                });
+                                break;
+
+                            default:
+                                break;
+                        }
+                                            } catch (error) {
+                            console.error('Error rendering chart:', error);
+                            return (
+                                <div className="text-red-600 p-4 bg-red-50 border border-red-200 rounded">
+                                    <h5 className="font-bold mb-2">Chart Rendering Error:</h5>
+                                    <p>{error.message}</p>
+                                    <div className="mt-3 p-3 bg-gray-100 rounded text-sm">
+                                        <strong>Raw Data:</strong> {JSON.stringify(plotData, null, 2)}
+                                    </div>
+                                </div>
+                            );
+                        }
+                };
+
+                return (
+                    <div className="chart-container">
+                        <h4 className="text-lg font-semibold mb-4">
+                            {plotType === 'histogram' && `Histogram: ${selectedColumns.histogram}`}
+                            {plotType === 'barchart' && `Bar Chart: ${selectedColumns.barchart}`}
+                            {plotType === 'scatter' && (
+                                selectedColumns.colorAxis 
+                                    ? `Scatter Plot: ${selectedColumns.xAxis} vs ${selectedColumns.yAxis} (Color-coded by ${selectedColumns.colorAxis})`
+                                    : `Scatter Plot: ${selectedColumns.xAxis} vs ${selectedColumns.yAxis}`
+                            )}
+                            {plotType === 'correlation' && 'Correlation Heatmap'}
+                        </h4>
+                        
+                        {/* Debug info */}
+                        <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
+                            <strong>Debug Info:</strong> Plot Type: {plotType}, Data: {plotData ? 'Loaded' : 'None'}
+                        </div>
+                        
+                        <div id="chartContainer" className="flex justify-center min-h-[400px] border-2 border-dashed border-gray-300 rounded-lg p-4">
+                            {/* Chart will be rendered here */}
+                            {!plotData && <div className="text-gray-500">No plot data available</div>}
+                            
+                            {/* Fallback data display */}
+                            {plotData && (
+                                <div className="text-left w-full max-w-2xl">
+                                    <h5 className="font-bold mb-2 text-blue-600">Data Preview (Chart may be loading...)</h5>
+                                    <div className="text-sm text-gray-600">
+                                        <p><strong>Data Type:</strong> {plotType}</p>
+                                        <p><strong>Data Points:</strong> {plotData.x ? plotData.x.length : 'N/A'}</p>
+                                        {plotData.labels && <p><strong>Labels:</strong> {plotData.labels.slice(0, 5).join(', ')}...</p>}
+                                        {plotData.values && <p><strong>Values:</strong> {plotData.values.slice(0, 5).join(', ')}...</p>}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Render chart with error handling */}
+                        <div className="mt-4">
+                            {renderChart()}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Data Analysis & Visualization</h2>
+                        <Button onClick={onSave} variant="success">
+                            Save Changes
+                        </Button>
+                    </div>
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Control Panel</h3>
+                        
+                        <div className="space-y-4">
+                            {/* Plot Type Selection */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Plot Type
+                                </label>
+                                <select
+                                    value={plotType}
+                                    onChange={(e) => setPlotType(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">Select Plot Type</option>
+                                    <option value="histogram">Histogram</option>
+                                    <option value="barchart">Bar Chart</option>
+                                    <option value="scatter">Scatter Plot</option>
+                                    <option value="scatter3d">3D Scatter Plot</option>
+                                    <option value="correlation">Correlation Heatmap</option>
+                                </select>
+                            </div>
+
+                            {/* Conditional Controls */}
+                            {plotType === 'histogram' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Numerical Column
+                                    </label>
+                                    <select
+                                        value={selectedColumns.histogram || ''}
+                                        onChange={(e) => setSelectedColumns(prev => ({ ...prev, histogram: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="">Select Column</option>
+                                        {numericalColumns.map(col => (
+                                            <option key={col} value={col}>{col}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {plotType === 'barchart' && (
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Categorical Column
+                                        </label>
+                                        <select
+                                            value={selectedColumns.barchart || ''}
+                                            onChange={(e) => setSelectedColumns(prev => ({ ...prev, barchart: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Select Column</option>
+                                            {categoricalColumns.map(col => (
+                                                <option key={col} value={col}>{col}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="checkbox"
+                                            id="sortByFrequency"
+                                            checked={sortByFrequency}
+                                            onChange={(e) => setSortByFrequency(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        />
+                                        <label htmlFor="sortByFrequency" className="text-sm text-gray-700">
+                                            Sort by Frequency
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(plotType === 'scatter' || plotType === 'scatter3d') && (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                X-Axis
+                                            </label>
+                                            <select
+                                                value={plotType === 'scatter' ? (selectedColumns.xAxis || '') : (selectedColumns.xAxis3D || '')}
+                                                onChange={(e) => {
+                                                    if (plotType === 'scatter') {
+                                                        setSelectedColumns(prev => ({ ...prev, xAxis: e.target.value }));
+                                                    } else {
+                                                        setSelectedColumns(prev => ({ ...prev, xAxis3D: e.target.value }));
+                                                    }
+                                                }}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">Select Column</option>
+                                                {numericalColumns.map(col => (
+                                                    <option key={col} value={col}>{col}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Y-Axis
+                                            </label>
+                                            <select
+                                                value={plotType === 'scatter' ? (selectedColumns.yAxis || '') : (selectedColumns.yAxis3D || '')}
+                                                onChange={(e) => {
+                                                    if (plotType === 'scatter') {
+                                                        setSelectedColumns(prev => ({ ...prev, yAxis: e.target.value }));
+                                                    } else {
+                                                        setSelectedColumns(prev => ({ ...prev, yAxis3D: e.target.value }));
+                                                    }
+                                                }}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">Select Column</option>
+                                                {numericalColumns.map(col => (
+                                                    <option key={col} value={col}>{col}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {plotType === 'scatter' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Color Code By (Optional)
+                                            </label>
+                                            <select
+                                                value={selectedColumns.colorAxis || ''}
+                                                onChange={(e) => setSelectedColumns(prev => ({ ...prev, colorAxis: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">No color coding</option>
+                                                {allColumns.map(col => (
+                                                    <option key={col} value={col}>{col}</option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Choose a column to color-code the points (e.g., "placed" for 0/1 values)
+                                            </p>
+                                        </div>
+                                    )}
+                                    
+                                    {plotType === 'scatter3d' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Z-Axis
+                                            </label>
+                                            <select
+                                                value={selectedColumns.zAxis3D || ''}
+                                                onChange={(e) => setSelectedColumns(prev => ({ ...prev, zAxis3D: e.target.value }))}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">Select Column</option>
+                                                {numericalColumns.map(col => (
+                                                    <option key={col} value={col}>{col}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Max Data Points
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={maxDataPoints}
+                                            onChange={(e) => setMaxDataPoints(parseInt(e.target.value) || 2000)}
+                                            min="100"
+                                            max="10000"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Generate Plot Button */}
+                            <div className="pt-4">
+                                <Button
+                                    onClick={generatePlot}
+                                    disabled={loading || !plotType}
+                                    variant="primary"
+                                    className="w-full"
+                                >
+                                    {loading ? 'Generating Plot...' : 'Generate Plot'}
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* Plot Output */}
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Plot Output</h3>
+                        
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                                <p className="text-sm text-red-600">{error}</p>
+                            </div>
+                        )}
+
+                        {plotData && renderPlot()}
+
+                        {!plotData && !error && (
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-2xl">📊</span>
+                                </div>
+                                <p className="text-gray-600">Select a plot type and configure the options above to generate visualizations.</p>
+                            </div>
+                            )}
+                    </Card>
+                </div>
+            );
+        };
+
+        // Build Model Stage Component
+        const BuildModelStage = ({ onSave }) => {
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Build Model</h2>
+                        <Button onClick={onSave} variant="success">
+                            Save Changes
+                        </Button>
+                    </div>
+                    <Card>
+                        <p className="text-gray-600">Model building tools will be implemented here.</p>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Logs Stage Component
+        const LogsStage = () => {
+            const [logs, setLogs] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+
+            useEffect(() => {
+                loadLogs();
+            }, []);
+
+            const loadLogs = async () => {
+                try {
+                    setLoading(true);
+                    const response = await fetch(`${API_BASE_URL}/api/project/logs`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setLogs(data.logs || []);
+                    } else {
+                        setError('Failed to load logs');
+                    }
+                } catch (err) {
+                    setError('Error loading logs');
+                    console.error('Error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-gray-900">Action Logs</h2>
+                        </div>
+                        <Card>
+                            <div className="flex justify-center py-8">
+                                <div className="loader"></div>
+                            </div>
+                        </Card>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Action Logs</h2>
+                        <Button onClick={loadLogs} variant="secondary">
+                            Refresh Logs
+                        </Button>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                            <p className="text-sm text-red-600">{error}</p>
+                        </div>
+                    )}
+
+                    <Card>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Actions</h3>
+                        
+                        {logs.length === 0 ? (
+                            <div className="text-center py-8">
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-2xl">📝</span>
+                                </div>
+                                <p className="text-gray-600">No actions logged yet.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {logs.map((log, index) => (
+                                    <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-gray-900">{log.description}</p>
+                                            <p className="text-xs text-gray-500 mt-1">{log.timestamp}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </Card>
+                </div>
+            );
+        };
+
+        // Export Stage Component
+        const ExportStage = () => {
+            const handleExport = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/export`);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'dataset.csv';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                    }
+                } catch (error) {
+                    console.error('Export error:', error);
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-gray-900">Export Dataset</h2>
+                        <Button onClick={handleExport} variant="primary">
+                            Download CSV
+                        </Button>
+                    </div>
+                    <Card>
+                        <p className="text-gray-600">Export your processed dataset as a CSV file.</p>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Main Project Workspace Component
+        const ProjectWorkspace = ({ onNavigate }) => {
+            const [project, setProject] = useState(null);
+            const [currentStage, setCurrentStage] = useState('upload');
+            const [datasetPreview, setDatasetPreview] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [uploadError, setUploadError] = useState(null);
+
+            // Load project from localStorage
+            useEffect(() => {
+                const savedProject = JSON.parse(localStorage.getItem('current_project') || 'null');
+                console.log('Loaded project from localStorage:', savedProject);
+                
+                if (savedProject) {
+                    setProject(savedProject);
+                    // Always start with upload stage for now
+                    setIsLoading(false);
+                    setCurrentStage('upload');
+                } else {
+                    console.log('No project found, navigating to dashboard');
+                    onNavigate('dashboard');
+                }
+            }, [onNavigate]);
+
+            const handleFileUpload = async (file) => {
+                setUploadError(null);
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Upload failed');
+                    }
+
+                    const result = await response.json();
+                    console.log('Upload successful:', result);
+
+                    // Update project state
+                    const updatedProject = {
+                        ...project,
+                        dataUploaded: true,
+                        currentStage: 'preview'
+                    };
+                    setProject(updatedProject);
+                    localStorage.setItem('current_project', JSON.stringify(updatedProject));
+
+                    // Load dataset preview
+                    await loadDatasetPreview();
+                    setCurrentStage('preview');
+                    
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    setUploadError(error.message);
+                }
+            };
+
+            const loadDatasetPreview = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/data/preview`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setDatasetPreview(data);
+                    } else {
+                        console.log('No dataset available yet');
+                        setDatasetPreview(null);
+                    }
+                } catch (err) {
+                    console.error('Error loading dataset preview:', err);
+                    setDatasetPreview(null);
+                }
+            };
+
+            const handleSave = async () => {
+                try {
+                    const projectData = {
+                        project_id: project.id,
+                        current_stage: currentStage,
+                        data_uploaded: project.dataUploaded,
+                        last_saved: new Date().toISOString()
+                    };
+                    
+                    const response = await fetch(`${API_BASE_URL}/api/project/save`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(projectData)
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Project saved successfully');
+                        // Refresh dataset preview after saving
+                        await loadDatasetPreview();
+                    }
+                } catch (error) {
+                    console.error('Save error:', error);
+                }
+            };
+
+            const renderStageContent = () => {
+                switch (currentStage) {
+                    case 'upload':
+                        return <UploadStage onUpload={handleFileUpload} isLoading={isLoading} error={uploadError} />;
+                    case 'preview':
+                        return datasetPreview ? (
+                            <DatasetPreview
+                                data={datasetPreview.data}
+                                columns={datasetPreview.columns}
+                                totalRows={datasetPreview.total_rows}
+                                totalColumns={datasetPreview.total_columns}
+                            />
+                        ) : (
+                            <div className="text-center py-12">
+                                <p className="text-gray-600">No dataset available</p>
+                            </div>
+                        );
+                    case 'profile':
+                        return <ProfileStage onSave={handleSave} />;
+                    case 'data':
+                        return <DataStage onSave={handleSave} />;
+                    case 'clean':
+                        return <CleanStage onSave={handleSave} />;
+                    case 'analyze':
+                        return <AnalyzeStage onSave={handleSave} />;
+                    case 'buildModel':
+                        return <BuildModelStage onSave={handleSave} />;
+                    case 'logs':
+                        return <LogsStage />;
+                    case 'export':
+                        return <ExportStage />;
+                    default:
+                        return <UploadStage onUpload={handleFileUpload} isLoading={isLoading} error={uploadError} />;
+                }
+            };
+
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen bg-gray-50 flex justify-center items-center">
+                        <div className="loader"></div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center py-4">
+                                <div className="flex items-center">
+                                    <button
+                                        onClick={() => onNavigate('dashboard')}
+                                        className="text-gray-500 hover:text-gray-700 mr-4"
+                                    >
+                                        ← Back to Dashboard
+                                    </button>
+                                    <h1 className="text-xl font-semibold text-gray-900">
+                                        {project?.name || 'Project'}
+                                    </h1>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <div className="flex">
+                        {/* Show sidebar only if data is uploaded */}
+                        {project?.dataUploaded ? (
+                            <Sidebar
+                                currentStage={currentStage}
+                                onStageChange={setCurrentStage}
+                                project={project}
+                            />
+                        ) : null}
+
+                        {/* Main content area */}
+                        <div className="flex-1 p-8">
+                            {project?.dataUploaded ? (
+                                renderStageContent()
+                            ) : (
+                                <UploadStage onUpload={handleFileUpload} isLoading={isLoading} error={uploadError} />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Dashboard Component
+        const Dashboard = ({ onNavigate }) => {
+            const [projects, setProjects] = useState([]);
+            const [newProjectName, setNewProjectName] = useState('');
+
+            useEffect(() => {
+                const savedProjects = JSON.parse(localStorage.getItem('projects') || '[]');
+                setProjects(savedProjects);
+            }, []);
+
+            const createNewProject = () => {
+                if (!newProjectName.trim()) return;
+
+                const newProject = {
+                    id: Date.now().toString(),
+                    name: newProjectName.trim(),
+                    createdAt: new Date().toISOString(),
+                    currentStage: 'upload',
+                    dataUploaded: false
+                };
+
+                const updatedProjects = [...projects, newProject];
+                setProjects(updatedProjects);
+                localStorage.setItem('projects', JSON.stringify(updatedProjects));
+                setNewProjectName('');
+            };
+
+            const openProject = (project) => {
+                console.log('Opening project:', project);
+                localStorage.setItem('current_project', JSON.stringify(project));
+                onNavigate('project', project);
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="text-center mb-12">
+                            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                                Data Science Platform
+                            </h1>
+                            <p className="text-xl text-gray-600">
+                                Upload, clean, analyze, and export your datasets
+                            </p>
+                        </div>
+
+                        {/* Create New Project */}
+                        <Card className="mb-8">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Project</h2>
+                            <div className="flex gap-4">
+                                <input
+                                    type="text"
+                                    value={newProjectName}
+                                    onChange={(e) => setNewProjectName(e.target.value)}
+                                    placeholder="Enter project name..."
+                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                                <Button onClick={createNewProject} disabled={!newProjectName.trim()}>
+                                    Create Project
+                                </Button>
+                            </div>
+                        </Card>
+
+                        {/* Projects List */}
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Projects</h2>
+                            {projects.length === 0 ? (
+                                <Card>
+                                    <div className="text-center py-12">
+                                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <span className="text-3xl">📁</span>
+                                        </div>
+                                        <h3 className="text-xl font-semibold text-gray-900 mb-2">No Projects Yet</h3>
+                                        <p className="text-gray-600">Create your first project to get started</p>
+                                    </div>
+                                </Card>
+                            ) : (
+                                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                                    {projects.map((project) => (
+                                        <Card key={project.id} className="cursor-pointer hover:shadow-lg transition-shadow">
+                                            <div onClick={() => openProject(project)}>
+                                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                                    {project.name}
+                                                </h3>
+                                                <p className="text-sm text-gray-600 mb-4">
+                                                    Created: {new Date(project.createdAt).toLocaleDateString()}
+                                                </p>
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                        project.dataUploaded 
+                                                            ? 'bg-green-100 text-green-800' 
+                                                            : 'bg-gray-100 text-gray-800'
+                                                    }`}>
+                                                        {project.dataUploaded ? 'Dataset Uploaded' : 'No Dataset'}
+                                                    </span>
+                                                    <Button variant="outline" size="sm">
+                                                        Open Project
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [currentView, setCurrentView] = useState('dashboard');
+            const [currentProject, setCurrentProject] = useState(null);
+
+            const handleNavigate = (view, project = null) => {
+                setCurrentView(view);
+                setCurrentProject(project);
+            };
+
+            return (
+                <div>
+                    {currentView === 'dashboard' && (
+                        <Dashboard onNavigate={handleNavigate} />
+                    )}
+                    {currentView === 'project' && (
+                        <ProjectWorkspace onNavigate={handleNavigate} />
+                    )}
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html> 

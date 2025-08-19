@@ -1,0 +1,11 @@
+Name,Age,City,Salary,Department
+John,25,New York,50000,Engineering
+Alice,30,Los Angeles,,Marketing
+Bob,35,Chicago,55000,
+Emma,28,Boston,52000,Engineering
+David,,Seattle,58000,Sales
+Sarah,32,,60000,Marketing
+Mike,29,San Francisco,,Engineering
+Lisa,27,Denver,54000,
+Tom,31,Austin,56000,Sales
+Anna,26,Portland,,Marketing 

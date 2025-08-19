@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorical Encoding Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 mb-8">Categorical Encoding Test</h1>
+        
+        <div class="space-y-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Backend Status</h2>
+                <div id="backend-status" class="text-sm">
+                    Testing backend connectivity...
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Categorical Columns Test</h2>
+                <div id="categorical-test" class="space-y-2 text-sm">
+                    Testing categorical columns detection...
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Encoding Test</h2>
+                <div id="encoding-test" class="space-y-2 text-sm">
+                    Testing encoding operations...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://127.0.0.1:8000";
+        
+        async function testBackend() {
+            const statusDiv = document.getElementById('backend-status');
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/data/profile`);
+                if (response.ok) {
+                    statusDiv.innerHTML = '<span class="text-green-600">✅ Backend is running and accessible</span>';
+                } else {
+                    statusDiv.innerHTML = '<span class="text-yellow-600">⚠️ Backend responded but no data loaded</span>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="text-red-600">❌ Backend connection failed</span>';
+            }
+        }
+        
+        async function testCategoricalColumns() {
+            const testDiv = document.getElementById('categorical-test');
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/data/profile`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const categoricalCols = data.column_info
+                        .filter(col => col.Dtype === 'object' || col.Dtype === 'category')
+                        .map(col => col.Column);
+                    
+                    testDiv.innerHTML = `
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span>Categorical columns found:</span>
+                                <span class="text-green-600">✅ ${categoricalCols.length}</span>
+                            </div>
+                            <div class="text-xs text-gray-600">
+                                Columns: ${categoricalCols.join(', ')}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    testDiv.innerHTML = '<span class="text-red-600">❌ Failed to load data profile</span>';
+                }
+            } catch (error) {
+                testDiv.innerHTML = '<span class="text-red-600">❌ Error testing categorical columns</span>';
+            }
+        }
+        
+        async function testEncoding() {
+            const testDiv = document.getElementById('encoding-test');
+            testDiv.innerHTML = 'Testing encoding operations...';
+            
+            try {
+                // Test one-hot encoding
+                const oneHotResponse = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        operations: [{ type: 'one_hot_encode', columns: ['City'] }]
+                    })
+                });
+                
+                const oneHotResult = oneHotResponse.ok ? '✅' : '❌';
+                const oneHotStatus = oneHotResponse.ok ? 'Success' : `Failed (${oneHotResponse.status})`;
+                
+                // Test label encoding
+                const labelResponse = await fetch(`${API_BASE_URL}/api/data/clean`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        operations: [{ type: 'label_encode', columns: ['Name'] }]
+                    })
+                });
+                
+                const labelResult = labelResponse.ok ? '✅' : '❌';
+                const labelStatus = labelResponse.ok ? 'Success' : `Failed (${labelResponse.status})`;
+                
+                testDiv.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span>One-Hot Encoding:</span>
+                            <span class="${oneHotResponse.ok ? 'text-green-600' : 'text-red-600'}">${oneHotResult} ${oneHotStatus}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>Label Encoding:</span>
+                            <span class="${labelResponse.ok ? 'text-green-600' : 'text-red-600'}">${labelResult} ${labelStatus}</span>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                testDiv.innerHTML = '<span class="text-red-600">❌ Error testing encoding operations</span>';
+            }
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', () => {
+            testBackend();
+            setTimeout(testCategoricalColumns, 1000);
+            setTimeout(testEncoding, 2000);
+        });
+    </script>
+</body>
+</html> 

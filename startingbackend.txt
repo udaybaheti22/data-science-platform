@@ -1,0 +1,3 @@
+cd D:\ml-project\backend
+venv\Scripts\activate
+uvicorn main:app --reload
