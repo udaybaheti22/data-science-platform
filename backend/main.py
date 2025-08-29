@@ -9,8 +9,17 @@ import io
 import json
 from typing import Dict, Any
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+from pydantic import BaseModel
+from typing import List, Dict, Any
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
+import base64
+from io import BytesIO
+# import seaborn as sns
 # import plotly.graph_objects as go
 # import plotly.express as px
 # import plotly.utils
@@ -66,6 +75,15 @@ def log_action(description: str):
 
 
 # --- API Endpoints ---
+
+# Pydantic model for model training requests
+class TrainRequest(BaseModel):
+    target_column: str
+    feature_columns: List[str]
+    test_size: float
+    random_state: int
+    model_name: str
+    hyperparameters: Dict[str, Any]
 
 @app.post("/api/upload")
 async def upload_dataset(file: UploadFile = File(...)):
@@ -454,17 +472,48 @@ async def get_missing_summary():
 
 
 @app.get("/api/data/export")
-async def export_dataset():
+async def export_dataset(name: str = 'full'):
     """
-    Exports the current dataset as a CSV file for download.
+    Exports the dataset as a CSV file for download.
+    Supports exporting full dataset, training set, or test set.
     """
-    df = data_store.get("main_df")
-    if df is None:
-        raise HTTPException(status_code=404, detail="No dataset found. Please upload a file first.")
-
     try:
-        # Convert dataframe to CSV string
-        csv_string = df.to_csv(index=False)
+        if name == 'train':
+            # Export training set
+            X_train = data_store.get('X_train')
+            y_train = data_store.get('y_train')
+            if X_train is None or y_train is None:
+                raise HTTPException(status_code=404, detail="Training set not found. Please train a model first.")
+            
+            # Combine features and target
+            train_df = X_train.copy()
+            train_df[data_store.get('target_column', 'target')] = y_train
+            
+            csv_string = train_df.to_csv(index=False)
+            filename = "train_dataset.csv"
+            
+        elif name == 'test':
+            # Export test set
+            X_test = data_store.get('X_test')
+            y_test = data_store.get('y_test')
+            if X_test is None or y_test is None:
+                raise HTTPException(status_code=404, detail="Test set not found. Please train a model first.")
+            
+            # Combine features and target
+            test_df = X_test.copy()
+            test_df[data_store.get('target_column', 'target')] = y_test
+            
+            csv_string = test_df.to_csv(index=False)
+            filename = "test_dataset.csv"
+            
+        else:
+            # Export full dataset
+            df = data_store.get("main_df")
+            if df is None:
+                raise HTTPException(status_code=404, detail="No dataset found. Please upload a file first.")
+            
+            csv_string = df.to_csv(index=False)
+            filename = "dataset.csv"
         
         # Create a streaming response
         csv_bytes = csv_string.encode('utf-8')
@@ -473,7 +522,7 @@ async def export_dataset():
         return StreamingResponse(
             iter([csv_io.getvalue()]),
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=dataset.csv"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
         
     except Exception as e:
@@ -715,6 +764,135 @@ async def get_profile_report():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating profile report: {e}")
 
+
+@app.post("/api/model/train")
+async def train_model(request: TrainRequest):
+    """
+    Trains a machine learning model using the specified parameters.
+    """
+    df = data_store.get("main_df")
+    if df is None:
+        raise HTTPException(status_code=404, detail="No dataset found. Please upload a file first.")
+    
+    try:
+        # Validate columns exist
+        if request.target_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Target column '{request.target_column}' not found.")
+        
+        for col in request.feature_columns:
+            if col not in df.columns:
+                raise HTTPException(status_code=400, detail=f"Feature column '{col}' not found.")
+        
+        # Validate data types - all columns must be numerical for Linear Regression
+        if not pd.api.types.is_numeric_dtype(df[request.target_column]):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Target column '{request.target_column}' must be numerical. Current type: {df[request.target_column].dtype}"
+            )
+        
+        non_numerical_features = []
+        for col in request.feature_columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                non_numerical_features.append(col)
+        
+        if non_numerical_features:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Feature columns must be numerical. Non-numerical columns: {', '.join(non_numerical_features)}"
+            )
+        
+        # Prepare features and target
+        X = df[request.feature_columns]
+        y = df[request.target_column]
+        
+        # Drop rows with NaN values in any of the selected columns
+        valid_indices = X.notna().all(axis=1) & y.notna()
+        X = X[valid_indices]
+        y = y[valid_indices]
+        
+        if len(X) == 0:
+            raise HTTPException(status_code=400, detail="No valid data after removing NaN values.")
+        
+        # Perform train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, 
+            test_size=request.test_size, 
+            random_state=request.random_state
+        )
+        
+        # Store the split datasets for later export
+        data_store['X_train'] = X_train
+        data_store['X_test'] = X_test
+        data_store['y_train'] = y_train
+        data_store['y_test'] = y_test
+        data_store['target_column'] = request.target_column  # Store for export functionality
+        
+        # Log training details
+        log_action(f"Starting model training: {len(X_train)} train samples, {len(X_test)} test samples")
+        
+        # Instantiate and train the model
+        if request.model_name.lower() == "linear regression":
+            model = LinearRegression(**request.hyperparameters)
+        else:
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' not supported.")
+        
+        # Train the model
+        model.fit(X_train, y_train)
+        log_action(f"Model training completed successfully")
+        
+        # Make predictions
+        y_pred = model.predict(X_test)
+        
+        # Calculate R-squared score
+        r2 = r2_score(y_test, y_pred)
+        
+        # Store the trained model
+        data_store['trained_model'] = model
+        
+        # Generate plot if 1D feature
+        plot_url = "Higher dimension data: 2D plot not possible."
+        try:
+            if X_test.shape[1] == 1:
+                x_vals = X_test.iloc[:, 0].values
+                y_true = y_test.values
+                y_pred_plot = y_pred
+                
+                fig, ax = plt.subplots(figsize=(6, 4), dpi=120)
+                ax.scatter(x_vals, y_true, color='#1f77b4', alpha=0.7, label='Actual')
+                sort_idx = np.argsort(x_vals)
+                ax.plot(x_vals[sort_idx], y_pred_plot[sort_idx], color='#ff7f0e', linewidth=2, label='Predicted')
+                ax.set_xlabel(X_test.columns[0])
+                ax.set_ylabel(request.target_column)
+                ax.set_title(f"{request.model_name} (R² = {r2:.3f})")
+                ax.legend()
+                ax.grid(True, linestyle='--', alpha=0.3)
+                
+                buf = BytesIO()
+                plt.tight_layout()
+                fig.savefig(buf, format='png')
+                plt.close(fig)
+                buf.seek(0)
+                plot_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode('utf-8')
+        except Exception as plot_err:
+            plot_url = f"Plot generation failed: {plot_err}"
+        
+        # Log the action
+        log_action(f"Trained {request.model_name} model with R² score: {r2:.4f}")
+        
+        return {
+            "r2_score": float(r2),
+            "model_name": request.model_name,
+            "train_samples": len(X_train),
+            "test_samples": len(X_test),
+            "feature_columns": request.feature_columns,
+            "target_column": request.target_column,
+            "plot_url": plot_url
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error training model: {e}")
+
+
 @app.get("/api/data/undo")
 async def undo_last_action():
     """
@@ -754,190 +932,225 @@ async def get_history_length():
     }
 
 
-@app.get("/api/visualize/histogram/{column_name}")
-async def get_histogram_data(column_name: str):
-    """
-    Generates data required for plotting a histogram for a specific numerical column.
-    """
-    df = data_store.get("main_df")
-    if df is None:
-        raise HTTPException(status_code=404, detail="No dataset found.")
-    
-    if column_name not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found.")
-        
-    if not pd.api.types.is_numeric_dtype(df[column_name]):
-        raise HTTPException(status_code=400, detail=f"Column '{column_name}' is not numerical.")
+# @app.get("/api/visualize/histogram/{column_name}")
+# async def get_histogram_data(column_name: str):
+#     """
+#     Generates data required for plotting a histogram for a specific numerical column.
+#     """
+#     df = data_store.get("main_df")
+#     if df is None:
+#         raise HTTPException(status_code=404, detail="No dataset found.")
+#     
+#     if column_name not in df.columns:
+#         raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found.")
+#         
+#     if not pd.api.types.is_numeric_dtype(df[column_name]):
+#         raise HTTPException(status_code=400, detail=f"Column '{column_name}' is not numerical.")
+# 
+#     # Generate histogram data using NumPy
+#     # We drop NaNs to avoid errors during calculation
+#     counts, bin_edges = np.histogram(df[column_name].dropna(), bins=20)
+# 
+#     log_action(f"Generated histogram for column: {column_name}")
+#     
+#     return {
+#         "counts": counts.tolist(),
+#         "bin_edges": bin_edges.tolist()
+#     }
 
-    # Generate histogram data using NumPy
-    # We drop NaNs to avoid errors during calculation
-    counts, bin_edges = np.histogram(df[column_name].dropna(), bins=20)
 
-    log_action(f"Generated histogram for column: {column_name}")
-    
-    return {
-        "counts": counts.tolist(),
-        "bin_edges": bin_edges.tolist()
-    }
-
-
-@app.get("/api/visualize/barchart")
-async def get_barchart_data(column: str, sort_by: str = "frequency"):
-    """
-    Generates data required for plotting a bar chart for a categorical column.
-    """
-    df = data_store.get("main_df")
-    if df is None:
-        raise HTTPException(status_code=404, detail="No dataset found.")
-    
-    if column not in df.columns:
-        raise HTTPException(status_code=404, detail=f"Column '{column}' not found.")
-        
-    if pd.api.types.is_numeric_dtype(df[column]):
-        raise HTTPException(status_code=400, detail=f"Column '{column}' is numerical. Use histogram instead.")
-
-    try:
-        # Get value counts
-        value_counts = df[column].value_counts()
-        
-        # Sort by frequency if requested
-        if sort_by == "frequency":
-            value_counts = value_counts.sort_values(ascending=False)
-        
-        # Take top 20 values for better visualization
-        top_values = value_counts.head(20)
-        
-        log_action(f"Generated bar chart for column: {column}")
-        
-        return {
-            "labels": top_values.index.tolist(),
-            "values": top_values.values.tolist()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating bar chart: {e}")
+# @app.get("/api/visualize/barchart")
+# async def get_barchart_data(column: str, sort_by: str = "frequency"):
+#     """
+#     Generates data required for plotting a bar chart for a categorical column.
+#     """
+#     df = data_store.get("main_df")
+#     if df is None:
+#         raise HTTPException(status_code=404, detail="No dataset found.")
+#     
+#     if column not in df.columns:
+#         raise HTTPException(status_code=404, detail=f"Column '{column}' not found.")
+#         
+#     if pd.api.types.is_numeric_dtype(df[column]):
+#         raise HTTPException(status_code=400, detail=f"Column '{column}' is numerical. Use histogram instead.")
+# 
+#     try:
+#         # Get value counts
+#         value_counts = df[column].value_counts()
+# 
+#         # Sort by frequency if requested
+#         if sort_by == "frequency":
+#             value_counts = value_counts.sort_values(ascending=False)
+# 
+#         # Sort by frequency if requested
+#         if sort_by == "frequency":
+#             value_counts = value_counts.sort_values(ascending=False)
+#         
+#         # Take top 20 values for better visualization
+#         top_values = value_counts.head(20)
+#         
+#         log_action(f"Generated bar chart for column: {column}")
+#         
+#         return {
+#             "labels": top_values.index.tolist(),
+#             "values": top_values.values.tolist()
+#         }
+#         
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating bar chart: {e}")
 
 
 @app.get("/api/visualize/scatter")
-async def get_scatter_data(x_col: str, y_col: str, color_col: str = None, sample_size: int = 2000):
+async def get_scatter_data(
+    x_col: str,
+    y_col: str,
+    color_col: str | None = None,
+    sample_size: int = 2000,
+    output: str = "json"  # "json" or "png"
+):
     """
-    Generates data required for plotting a 2D scatter plot with optional color coding.
+    Generates a 2D scatter plot dataset or image.
+    - output=json: returns arrays and column names
+    - output=png: returns base64 PNG data URL
     """
     df = data_store.get("main_df")
     if df is None:
         raise HTTPException(status_code=404, detail="No dataset found.")
-    
+
     if x_col not in df.columns or y_col not in df.columns:
         raise HTTPException(status_code=404, detail="One or both columns not found.")
-        
+
     if not pd.api.types.is_numeric_dtype(df[x_col]) or not pd.api.types.is_numeric_dtype(df[y_col]):
         raise HTTPException(status_code=400, detail="Both columns must be numerical.")
-    
-    # Validate color column if provided
+
     if color_col and color_col not in df.columns:
         raise HTTPException(status_code=404, detail="Color column not found.")
 
     try:
-        # Prepare columns for cleaning
-        columns_to_clean = [x_col, y_col]
-        if color_col:
-            columns_to_clean.append(color_col)
-        
-        # Drop rows with NaN values in any of the required columns
+        columns_to_clean = [x_col, y_col] + ([color_col] if color_col else [])
         clean_df = df[columns_to_clean].dropna()
-        
-        # Sample data if dataset is large
+
         if len(clean_df) > sample_size:
             clean_df = clean_df.sample(n=sample_size, random_state=42)
-        
-        # Prepare response data
-        response_data = {
-            "x": clean_df[x_col].tolist(),
-            "y": clean_df[y_col].tolist(),
-            "x_col": x_col,
-            "y_col": y_col
-        }
-        
-        # Add color data if color column is specified
-        if color_col:
-            response_data["color"] = clean_df[color_col].tolist()
-            response_data["color_col"] = color_col
-            log_action(f"Generated 2D scatter plot for columns: {x_col} vs {y_col} with color coding: {color_col}")
-        else:
-            log_action(f"Generated 2D scatter plot for columns: {x_col} vs {y_col}")
-        
-        return response_data
-        
+
+        if output == "json":
+            response_data: Dict[str, Any] = {
+                "x": clean_df[x_col].tolist(),
+                "y": clean_df[y_col].tolist(),
+                "x_col": x_col,
+                "y_col": y_col
+            }
+            if color_col:
+                response_data["color"] = clean_df[color_col].tolist()
+                response_data["color_col"] = color_col
+                log_action(f"Prepared 2D scatter data: {x_col} vs {y_col} colored by {color_col}")
+            else:
+                log_action(f"Prepared 2D scatter data: {x_col} vs {y_col}")
+            return response_data
+
+        if output == "png":
+            fig, ax = plt.subplots(figsize=(6, 4), dpi=120)
+            if color_col is None:
+                ax.scatter(clean_df[x_col], clean_df[y_col], s=16, alpha=0.75)
+            else:
+                # If color column is numeric, use a continuous colormap; otherwise use categorical mapping
+                if pd.api.types.is_numeric_dtype(clean_df[color_col]):
+                    sc = ax.scatter(clean_df[x_col], clean_df[y_col], c=clean_df[color_col], cmap="viridis", s=16, alpha=0.85)
+                    cbar = plt.colorbar(sc, ax=ax)
+                    cbar.set_label(color_col)
+                else:
+                    categories = clean_df[color_col].astype("category")
+                    codes = categories.cat.codes
+                    sc = ax.scatter(clean_df[x_col], clean_df[y_col], c=codes, cmap="tab10", s=16, alpha=0.85)
+                    # Create legend mapping
+                    handles = []
+                    labels = []
+                    for code, name in enumerate(categories.cat.categories):
+                        handles.append(matplotlib.lines.Line2D([], [], linestyle='', marker='o', color=sc.cmap(sc.norm(code)), markersize=6))
+                        labels.append(str(name))
+                    ax.legend(handles, labels, title=color_col, loc='best', fontsize=8)
+
+            ax.set_xlabel(x_col)
+            ax.set_ylabel(y_col)
+            ax.set_title(f"Scatter: {x_col} vs {y_col}")
+            ax.grid(True, linestyle='--', alpha=0.3)
+
+            buf = BytesIO()
+            plt.tight_layout()
+            fig.savefig(buf, format='png')
+            plt.close(fig)
+            buf.seek(0)
+            data_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+            log_action(f"Generated 2D scatter image: {x_col} vs {y_col}{' colored by ' + color_col if color_col else ''}")
+            return {"image": data_url, "x_col": x_col, "y_col": y_col, "color_col": color_col}
+
+        raise HTTPException(status_code=400, detail="Invalid output type. Use 'json' or 'png'.")
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating scatter plot: {e}")
 
 
-@app.get("/api/visualize/scatter3d")
-async def get_scatter3d_data(x_col: str, y_col: str, z_col: str, sample_size: int = 2000):
-    """
-    Generates data required for plotting a 3D scatter plot.
-    """
-    df = data_store.get("main_df")
-    if df is None:
-        raise HTTPException(status_code=404, detail="No dataset found.")
-    
-    if x_col not in df.columns or y_col not in df.columns or z_col not in df.columns:
-        raise HTTPException(status_code=404, detail="One or more columns not found.")
-        
-    if not all(pd.api.types.is_numeric_dtype(df[col]) for col in [x_col, y_col, z_col]):
-        raise HTTPException(status_code=400, detail="All three columns must be numerical.")
-
-    try:
-        # Drop rows with NaN values in any of the three columns
-        clean_df = df[[x_col, y_col, z_col]].dropna()
-        
-        # Sample data if dataset is large
-        if len(clean_df) > sample_size:
-            clean_df = clean_df.sample(n=sample_size, random_state=42)
-        
-        log_action(f"Generated 3D scatter plot for columns: {x_col}, {y_col}, {z_col}")
-        
-        return {
-            "x": clean_df[x_col].tolist(),
-            "y": clean_df[y_col].tolist(),
-            "z": clean_df[z_col].tolist(),
-            "x_col": x_col,
-            "y_col": y_col,
-            "z_col": z_col
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating 3D scatter plot: {e}")
+# @app.get("/api/visualize/scatter3d")
+# async def get_scatter3d_data(x_col: str, y_col: str, z_col: str, sample_size: int = 2000):
+#     """
+#     Generates data required for plotting a 3D scatter plot.
+#     """
+#     df = data_store.get("main_df")
+#         raise HTTPException(status_code=404, detail="No dataset found.")
+#     
+#     if x_col not in df.columns or y_col not in df.columns or z_col not in df.columns:
+#         raise HTTPException(status_code=404, detail="One or more columns not found.")
+#         
+#     if not all(pd.api.types.is_numeric_dtype(df[col]) for col in [x_col, y_col, z_col]):
+#         raise HTTPException(status_code=400, detail="All three columns must be numerical.")
+# 
+#     try:
+#         # Drop rows with NaN values in any of the three columns
+#         clean_df = df[[x_col, y_col, z_col]].dropna()
+#         
+#         # Sample data if dataset is large
+#         if len(clean_df) > sample_size:
+#             clean_df = clean_df.sample(n=sample_size, random_state=42)
+#         
+#         log_action(f"Generated 3D scatter plot for columns: {x_col}, {y_col}, {z_col}")
+#         
+#         return {
+#             "x": clean_df[x_col].tolist(),
+#             "y": clean_df[y_col].tolist(),
+#             "z_col": z_col
+#         }
+#         
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating 3D scatter plot: {e}")
 
 
-@app.get("/api/visualize/correlation")
-async def get_correlation_data():
-    """
-    Generates correlation matrix data for numerical columns.
-    """
-    df = data_store.get("main_df")
-    if df is None:
-        raise HTTPException(status_code=404, detail="No dataset found.")
-
-    try:
-        # Get only numerical columns
-        numerical_df = df.select_dtypes(include=[np.number])
-        
-        if len(numerical_df.columns) < 2:
-            raise HTTPException(status_code=400, detail="Need at least 2 numerical columns for correlation analysis.")
-        
-        # Calculate correlation matrix
-        corr_matrix = numerical_df.corr()
-        
-        log_action("Generated correlation matrix for numerical columns")
-        
-        return {
-            "correlation_matrix": corr_matrix.round(3).to_dict(),
-            "columns": numerical_df.columns.tolist()
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating correlation matrix: {e}")
+# @app.get("/api/visualize/correlation")
+# async def get_correlation_data():
+#     """
+#     Generates correlation matrix data for numerical columns.
+#     """
+#     df = data_store.get("main_df")
+#     if df is None:
+#         raise HTTPException(status_code=404, detail="No dataset found.")
+# 
+#     try:
+#         # Get only numerical columns
+#         numerical_df = df.select_dtypes(include=[np.number])
+# 
+#         # Calculate correlation matrix
+#         corr_matrix = numerical_df.corr()
+#         
+#         log_action("Generated correlation matrix for numerical columns")
+#         
+#         return {
+#             "correlation_matrix": corr_matrix.round(3).to_dict(),
+#             "columns": numerical_df.columns.tolist()
+#         }
+#         
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating correlation matrix: {e}")
 
 
 # To run this app:

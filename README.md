@@ -20,13 +20,9 @@ ml-project/
 ├── backend/
 │   ├── main.py              # FastAPI backend server
 │   ├── requirements.txt     # Python dependencies
-│   └── venv/                # Virtual environment
+│   └── venv/               # Virtual environment
 ├── frontend/
-│   ├── index.html           # Entry HTML (loads module)
-│   └── src/                 # Frontend modules
-│       ├── api.js           # All fetch calls to backend
-│       ├── components.js    # Reusable React components
-│       └── App.js           # App entrypoint (theme + Build Model)
+│   └── index.html          # React-based frontend
 └── README.md               # This file
 ```
 
@@ -68,18 +64,14 @@ The backend will be available at `http://127.0.0.1:8000`
 
 ### Frontend Setup
 
-Option A — Simple static server (recommended):
+1. **Open the frontend file:**
+   - Navigate to the `frontend` directory
+   - Open `index.html` in your web browser
+   - Or use a local server like Live Server in VS Code
 
-```bash
-cd frontend
-python -m http.server 5500
-```
-
-Then open: `http://127.0.0.1:5500/index.html`
-
-Notes:
-- `index.html` now loads a module entry: `/src/App.js`
-- Tailwind dark mode is enabled via `dark` class on `<html>`
+2. **Access the application:**
+   - Open `http://127.0.0.1:5500/frontend/index.html` (if using Live Server)
+   - Or simply open the `index.html` file directly in your browser
 
 ## How to Use
 
@@ -123,11 +115,9 @@ Notes:
 
 ### 6. Model Building
 
-1. Go to Build Model
-2. Select a numerical target and numerical feature columns
-3. Adjust test split and random state, set hyperparameters
-4. Click Train Model
-5. You will see the R-squared score. If there is exactly one feature, a 2D plot (scatter + regression line) is returned and displayed. If features > 1, a message indicates 2D plot is not possible.
+1. **Click "Build Model"** in the sidebar
+2. **Prepare for machine learning** (coming soon)
+3. **Click "Save Progress"** to save your work
 
 ### 7. Export Data
 
@@ -200,7 +190,6 @@ The backend provides the following API endpoints:
 
 ### Export Functionality
 - **CSV Download**: Export processed datasets
-- **Train/Test Export**: After training, export `train` or `test` splits via buttons
 - **Automatic Naming**: Files are named appropriately
 - **Browser Integration**: Uses native download functionality
 
@@ -208,51 +197,16 @@ The backend provides the following API endpoints:
 
 ### Backend (FastAPI)
 - **FastAPI**: Modern Python web framework
-- **Pandas/NumPy**: Data manipulation and numerical computing
-- **scikit-learn**: Cleaning utilities and Linear Regression model
-- **Matplotlib**: Generates Base64 plots for 1D regression
+- **Pandas**: Data manipulation and analysis
+- **NumPy**: Numerical computing
+- **scikit-learn**: Label encoding for categorical columns
 - **CORS**: Cross-origin resource sharing enabled
 
 ### Frontend (React)
-- **React 18 (ES modules)**: App is split across `/src` files
-- **Tailwind CSS**: Utility-first CSS framework with dark mode
-- **Modular API layer**: All fetch calls live in `src/api.js`
+- **React 18**: Modern JavaScript framework
+- **Tailwind CSS**: Utility-first CSS framework
+- **Local Storage**: Client-side data persistence
 - **Responsive Design**: Works on desktop and mobile
-
-## Quick Start
-
-Backend (new terminal):
-
-```bash
-cd backend
-venv\Scripts\activate  # Windows
-python -m pip install -r requirements.txt
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Frontend (another terminal):
-
-```bash
-cd frontend
-python -m http.server 5500
-```
-
-Open `http://127.0.0.1:5500/index.html`
-
-## Model Training API
-
-- `POST /api/model/train`
-  - Request body:
-    - `target_column`: string (must be numerical)
-    - `feature_columns`: string[] (all must be numerical)
-    - `test_size`: float (e.g., 0.2)
-    - `random_state`: int
-    - `model_name`: string ("Linear Regression")
-    - `hyperparameters`: object (e.g., `{ fit_intercept: true, positive: false }`)
-  - Response fields:
-    - `r2_score`: number
-    - `plot_url`: Base64 `data:image/png` if single feature, else a message
-    - plus metadata (samples, columns)
 
 ## Troubleshooting
 
