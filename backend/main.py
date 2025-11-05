@@ -43,6 +43,8 @@ origins = [
     "http://127.0.0.1:5500", # Common for VS Code Live Server
     "http://127.0.0.1:5501", # VS Code Live Server alternative port
     "http://127.0.0.1:3000",
+    "http://0.0.0.0:8000",   # Add this for any origin
+    "*",                     # Allow all origins for development
     "null" # Allows opening the HTML file directly
 ]
 
@@ -91,12 +93,17 @@ async def upload_dataset(file: UploadFile = File(...)):
     Handles the CSV file upload, reads it into a pandas DataFrame,
     and stores it in our simple in-memory store.
     """
+    print(f"Received upload request for file: {file.filename}")
+    
     if not file.filename.endswith('.csv'):
+        print(f"Invalid file type: {file.filename}")
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
 
     try:
         # Read the file content
         contents = await file.read()
+        print(f"File size: {len(contents)} bytes")
+        
         # Use io.BytesIO to read the byte string into pandas
         df = pd.read_csv(io.BytesIO(contents))
         
@@ -106,12 +113,15 @@ async def upload_dataset(file: UploadFile = File(...)):
         # Log the upload action
         log_action(f"Uploaded dataset: {file.filename} ({len(df)} rows, {len(df.columns)} columns)")
         
+        print(f"Successfully uploaded: {file.filename} ({len(df)} rows, {len(df.columns)} columns)")
+        
         return {
             "filename": file.filename,
             "rows": len(df),
             "columns": len(df.columns)
         }
     except Exception as e:
+        print(f"Error processing file: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
 
 
@@ -931,73 +941,6 @@ async def get_history_length():
         "history_length": len(data_store["history"])
     }
 
-
-# @app.get("/api/visualize/histogram/{column_name}")
-# async def get_histogram_data(column_name: str):
-#     """
-#     Generates data required for plotting a histogram for a specific numerical column.
-#     """
-#     df = data_store.get("main_df")
-#     if df is None:
-#         raise HTTPException(status_code=404, detail="No dataset found.")
-#     
-#     if column_name not in df.columns:
-#         raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found.")
-#         
-#     if not pd.api.types.is_numeric_dtype(df[column_name]):
-#         raise HTTPException(status_code=400, detail=f"Column '{column_name}' is not numerical.")
-# 
-#     # Generate histogram data using NumPy
-#     # We drop NaNs to avoid errors during calculation
-#     counts, bin_edges = np.histogram(df[column_name].dropna(), bins=20)
-# 
-#     log_action(f"Generated histogram for column: {column_name}")
-#     
-#     return {
-#         "counts": counts.tolist(),
-#         "bin_edges": bin_edges.tolist()
-#     }
-
-
-# @app.get("/api/visualize/barchart")
-# async def get_barchart_data(column: str, sort_by: str = "frequency"):
-#     """
-#     Generates data required for plotting a bar chart for a categorical column.
-#     """
-#     df = data_store.get("main_df")
-#     if df is None:
-#         raise HTTPException(status_code=404, detail="No dataset found.")
-#     
-#     if column not in df.columns:
-#         raise HTTPException(status_code=404, detail=f"Column '{column}' not found.")
-#         
-#     if pd.api.types.is_numeric_dtype(df[column]):
-#         raise HTTPException(status_code=400, detail=f"Column '{column}' is numerical. Use histogram instead.")
-# 
-#     try:
-#         # Get value counts
-#         value_counts = df[column].value_counts()
-# 
-#         # Sort by frequency if requested
-#         if sort_by == "frequency":
-#             value_counts = value_counts.sort_values(ascending=False)
-# 
-#         # Sort by frequency if requested
-#         if sort_by == "frequency":
-#             value_counts = value_counts.sort_values(ascending=False)
-#         
-#         # Take top 20 values for better visualization
-#         top_values = value_counts.head(20)
-#         
-#         log_action(f"Generated bar chart for column: {column}")
-#         
-#         return {
-#             "labels": top_values.index.tolist(),
-#             "values": top_values.values.tolist()
-#         }
-#         
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error generating bar chart: {e}")
 
 
 @app.get("/api/visualize/scatter")

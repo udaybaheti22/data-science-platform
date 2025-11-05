@@ -2715,14 +2715,27 @@
                 formData.append('file', file);
                 
                 try {
+                    console.log('Uploading file to:', `${API_BASE_URL}/api/upload`);
+                    console.log('File details:', file.name, file.size, file.type);
+                    
                     const response = await fetch(`${API_BASE_URL}/api/upload`, {
                         method: 'POST',
                         body: formData
                     });
                     
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', response.headers);
+                    
                     if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.detail || 'Upload failed');
+                        let errorMessage = 'Upload failed';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.detail || errorData.message || 'Upload failed';
+                        } catch (e) {
+                            const errorText = await response.text();
+                            errorMessage = errorText || `HTTP error! status: ${response.status}`;
+                        }
+                        throw new Error(errorMessage);
                     }
 
                     const result = await response.json();
@@ -2743,18 +2756,22 @@
                     
                 } catch (error) {
                     console.error('Upload error:', error);
-                    setUploadError(error.message);
+                    setUploadError(error.message || 'Failed to upload file. Please check if the backend is running.');
                 }
             };
 
             const loadDatasetPreview = async () => {
                 try {
+                    console.log('Loading dataset preview from:', `${API_BASE_URL}/api/data/preview`);
                     const response = await fetch(`${API_BASE_URL}/api/data/preview`);
+                    console.log('Preview response status:', response.status);
+                    
                     if (response.ok) {
                         const data = await response.json();
+                        console.log('Dataset preview loaded:', data);
                         setDatasetPreview(data);
                     } else {
-                        console.log('No dataset available yet');
+                        console.log('No dataset available yet, status:', response.status);
                         setDatasetPreview(null);
                     }
                 } catch (err) {
@@ -3021,8 +3038,9 @@
             );
         };
 
-        // Render the app
-        ReactDOM.render(<App />, document.getElementById('root'));
+        // Render the app using React 18 createRoot
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
-</html> 
+</html>
