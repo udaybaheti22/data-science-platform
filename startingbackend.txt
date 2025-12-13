@@ -1,3 +1,5 @@
 cd D:\ml-project\backend
+python -m venv venv
 venv\Scripts\activate
-uvicorn main:app --reload
+pip install -r requirements.txt
+uvicorn main:app --reload --host 127.0.0.1 --port 8000

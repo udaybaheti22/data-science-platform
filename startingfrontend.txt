@@ -1,0 +1,2 @@
+cd D:\ml-project\frontend
+python -m http.server 5501 --bind 127.0.0.1
