@@ -5,6 +5,6 @@ data_store = {
     "main_df": None,
     "project_states": {},
     "history": [],
-    "logs": []
+    "logs": [],
+    "checkpoints": []
 }
-

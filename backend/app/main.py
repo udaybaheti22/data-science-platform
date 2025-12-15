@@ -60,14 +60,20 @@ app.mount("/app", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="app
 
 @app.post("/api/upload")
 async def upload_dataset(file: UploadFile = File(...)):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
     try:
         contents = await file.read()
-        df = pd.read_csv(io.BytesIO(contents))
+        filename = file.filename or ""
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+            df = pd.read_excel(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Invalid file type. Please upload CSV or Excel.")
         data_store["main_df"] = df
-        log_action(f"Uploaded dataset: {file.filename} ({len(df)} rows, {len(df.columns)} columns)")
-        return {"filename": file.filename, "rows": len(df), "columns": len(df.columns)}
+        log_action(f"Uploaded dataset: {filename} ({len(df)} rows, {len(df.columns)} columns)")
+        return {"filename": filename, "rows": len(df), "columns": len(df.columns)}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
 
@@ -128,6 +134,7 @@ async def clean_dataset(cleaning_operations: Dict[str, Any]):
             elif op_type == "fill_missing":
                 method = operation.get("method", "mean")
                 columns = operation.get("columns", [])
+                constant_value = operation.get("value")
                 for col in columns:
                     if col in modified_df.columns:
                         if method == "mean" and pd.api.types.is_numeric_dtype(modified_df[col]):
@@ -138,6 +145,10 @@ async def clean_dataset(cleaning_operations: Dict[str, Any]):
                             modified_df[col] = modified_df[col].fillna(modified_df[col].mode()[0] if not modified_df[col].mode().empty else "Unknown")
                         elif method == "drop":
                             modified_df = modified_df.dropna(subset=[col])
+                        elif method == "constant":
+                            if constant_value is None:
+                                raise HTTPException(status_code=422, detail="Constant value is required for fill_missing with method 'constant'")
+                            modified_df[col] = modified_df[col].fillna(constant_value)
                 log_action(f"Filled missing values in columns: {', '.join(columns)} using {method} method")
             elif op_type == "remove_duplicates":
                 limit = operation.get("limit", None)
@@ -651,3 +662,64 @@ async def get_scatter_data(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating scatter plot: {e}")
+
+@app.get("/api/checkpoints/list")
+async def list_checkpoints():
+    checkpoints = data_store.get("checkpoints", [])
+    meta = []
+    for cp in checkpoints:
+        df = cp.get("df")
+        meta.append({
+            "id": cp.get("id"),
+            "timestamp": cp.get("timestamp"),
+            "description": cp.get("description"),
+            "rows": int(len(df)) if df is not None else 0,
+            "columns": int(len(df.columns)) if df is not None else 0,
+        })
+    return {"checkpoints": meta}
+
+@app.post("/api/checkpoints/save")
+async def save_checkpoint(payload: Dict[str, Any]):
+    df = data_store.get("main_df")
+    if df is None:
+        raise HTTPException(status_code=404, detail="No dataset found.")
+    description = payload.get("description")
+    confirm_eviction = bool(payload.get("confirm_eviction", False))
+    checkpoints = data_store.get("checkpoints")
+    if len(checkpoints) >= 5 and not confirm_eviction:
+        raise HTTPException(status_code=409, detail="Maximum checkpoint limit reached (5 datasets). Confirmation required to evict oldest.")
+    try:
+        if len(checkpoints) >= 5 and confirm_eviction:
+            checkpoints.pop(0)
+        import datetime as dt
+        cp = {
+            "id": f"cp-{int(dt.datetime.now().timestamp()*1000)}",
+            "timestamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "description": description,
+            "df": df.copy()
+        }
+        checkpoints.append(cp)
+        log_action("Saved dataset checkpoint")
+        return {"id": cp["id"], "timestamp": cp["timestamp"], "description": description, "rows": len(df), "columns": len(df.columns)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving checkpoint: {e}")
+
+@app.get("/api/checkpoints/export")
+async def export_checkpoint(id: str):
+    checkpoints = data_store.get("checkpoints")
+    target = None
+    for cp in checkpoints:
+        if cp.get("id") == id:
+            target = cp
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail="Checkpoint not found.")
+    try:
+        df = target["df"]
+        csv_string = df.to_csv(index=False)
+        filename = f"{id}.csv"
+        csv_bytes = csv_string.encode("utf-8")
+        csv_io = io.BytesIO(csv_bytes)
+        return StreamingResponse(iter([csv_io.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exporting checkpoint: {e}")
