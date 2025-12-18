@@ -6,57 +6,71 @@ A lightweight workbench for uploading, cleaning, profiling, and exporting datase
 
 This repository has been structurally refactored. Functionality and logic remain the same. The undo feature is temporarily disabled during this refactor phase.
 
-## Iteration 2: Single-Page Dashboard
+## Current Frontend (Vanilla HTML / CSS / JS)
 
-This iteration introduces a single-page dashboard focused on visibility and debuggability. Sections:
+The frontend is now a **single-page dashboard** built with plain HTML, CSS, and JavaScript (no React / Tailwind / Bootstrap). It uses a fixed left sidebar and card-based content area.
 
-- Upload (functional): select file and upload, view preview and metadata
-- Clean (placeholder): visible shell, features enabled progressively
-- Analyze (functional): generate data profile and download HTML
-- Model (placeholder): to be enabled later
-- Export (functional): download dataset as CSV
+### Sidebar Sections
 
-Error handling is loud by design: backend errors are surfaced directly in the UI and logged to the console.
+The sidebar contains the following sections. Only features backed by existing backend APIs are wired up; others are clearly marked as placeholders.
 
-## Iteration 3: UI/UX + Cleaning + Checkpointing
+- **Preview** (functional)
+  - Upload CSV/XLS(X) using the **Upload Dataset** card
+  - Calls `POST /api/upload`, then `GET /api/data/preview?limit=50`
+  - Renders a table preview and basic metadata (rows / columns)
 
-Enhancements:
+- **Automated Profile** (functional)
+  - **Generate Profile** button calls `GET /api/data/profile_report`
+  - Downloads an HTML profiling report (`data_profile_report.html`)
 
-- Sidebar-based navigation on a single page; jumps to sections and highlights the active item
-- Clean section provides stacked, scroll-through operations:
-  - Missing values: drop rows/columns; fill by mean/median/mode/drop/constant
-  - Duplicates: remove duplicate rows
-  - Column operations: drop columns; rename column
-  - Data types: convert column dtype (`int64`, `float64`, `object`, `datetime64[ns]`)
-  - Encoding: label and one-hot encoding
-  - Scaling: StandardScaler and MinMaxScaler
-  - Outliers: UI only (not implemented)
-- Dataset checkpointing:
-  - Explicit Save Dataset button
-  - Max 5 checkpoints with FIFO eviction
-  - Confirmation prompt when limit reached
-  - Export allows choosing final dataset or a checkpoint
+- **Data** (placeholder)
+  - Static cards describing future column type and renaming tools
+  - No backend calls; safe to click, nothing breaks
 
-Strict error-first behavior preserved.
+- **Clean** (partially functional)
+  - **Missing Values** card:
+    - On navigation to **Clean**, calls `GET /api/data/missing_summary`
+    - Renders per-column missing counts/ratios in a list
+  - All other clean operations (duplicates, drop columns, encoding, scaling) are **UI-only placeholders** until their APIs are implemented
+
+- **Analyze** (functional, reuses profile)
+  - **Generate Profile Report** button calls `GET /api/data/profile_report`
+  - Same behavior as **Automated Profile**; convenient second entry point
+
+- **Build Model** (placeholder)
+  - Describes a future modeling workspace
+  - No backend calls
+
+- **Logs** (placeholder)
+  - Static descriptive text; no log API is called yet
+
+- **Export** (functional)
+  - **Export Dataset** button uses `GET /api/data/export?format=csv|parquet`
+  - Triggers a file download (`dataset.csv` or `dataset.parquet`)
+
+Error handling remains **explicit**: backend errors are surfaced in a top-of-page alert and logged to the browser console.
 
 ## Tech Stack
 
-- FastAPI, Python, Pandas, NumPy, scikit-learn, Matplotlib
-- HTML, CSS, Vanilla JavaScript
+- **Backend**: FastAPI, Python, Pandas, NumPy, scikit-learn, Matplotlib
+- **Frontend**: HTML, CSS, Vanilla JavaScript
 
 ## Project Structure
 
-```
+```text
 frontend/
 ├── index.html
 └── static/
     ├── css/
-    │   └── main.css
-    └── js/
-        ├── api.js
-        ├── events.js
-        ├── render.js
-        └── main.js
+    │   ├── main.css       # Layout, typography, buttons, tables, section layout
+    │   ├── sidebar.css    # Fixed sidebar look & feel
+    │   └── cards.css      # Card shadow, radius, border, spacing
+    ├── js/
+    │   ├── api.js         # Thin wrappers around existing FastAPI endpoints
+    │   ├── ui.js          # Section switching, sidebar active state, alerts
+    │   ├── render.js      # DOM rendering helpers (tables, lists, logs)
+    │   └── events.js      # Wiring of buttons, sidebar, and API calls
+    └── icons/             # Small SVG icons for sidebar items
 
 backend/
 ├── app/
@@ -71,7 +85,7 @@ backend/
 
 ## How to Run the Backend
 
-```
+```bash
 cd backend
 uvicorn app.main:app --reload
 ```
@@ -81,23 +95,21 @@ Backend runs at `http://127.0.0.1:8000`.
 ## How to Run the Frontend
 
 - Open `frontend/index.html` directly in your browser, or
-- Use a static server (e.g., VS Code Live Server or `python -m http.server`)
+- Serve `frontend/` via a static server (e.g. VS Code Live Server or `python -m http.server`)
 
-## Single-Page Workflow
+Because the frontend is pure HTML/JS, there is **no build step**.
 
-- Use the top buttons to switch sections; all content lives on one page.
-- Upload shows a table preview and dataset metadata.
-- Analyze generates an HTML report via the backend and triggers a download.
-- Export downloads the current dataset as CSV.
- - Clean provides stacked blocks to apply operations; updates preview on success.
- - Save Dataset stores the current DataFrame as a checkpoint (max 5).
+## Effective Single-Page Workflow
 
-## Functional vs Placeholder
+- **1. Upload**: Go to **Preview**, upload a dataset, and confirm that the preview table and metadata load.
+- **2. Profile**: Use **Automated Profile** or **Analyze** to generate and download an HTML profile report.
+- **3. Inspect Missingness**: Navigate to **Clean** to see the Missing Values summary (backed by `/api/data/missing_summary`).
+- **4. Export**: Use **Export** to download the current dataset in CSV or Parquet format.
 
-- Functional: Upload, Clean operations, Analyze (profile download), Export (CSV and checkpoints)
-- Placeholder: Model
+All other UI elements are designed and styled but intentionally **do not** call the backend until the corresponding APIs are implemented.
 
 ## Current Limitations
 
-- No database; in-memory storage only
-- Undo disabled during refactor
+- In-memory storage only; no database
+- Undo is disabled during the refactor
+- Many cleaning and modeling controls are visual placeholders pending backend support

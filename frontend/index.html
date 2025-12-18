@@ -1,17 +1,275 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Data Science Platform</title>
-    <link rel="stylesheet" href="static/css/main.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Science Platform</title>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="static/css/main.css" />
+  <link rel="stylesheet" href="static/css/sidebar.css" />
+  <link rel="stylesheet" href="static/css/cards.css" />
 </head>
-<body class="app-bg">
-    <div id="root"></div>
-    <script src="static/js/api.js"></script>
-    <script src="static/js/state.js"></script>
-    <script src="static/js/render.js"></script>
-    <script src="static/js/events.js"></script>
-    <script src="static/js/main.js"></script>
+<body class="app-body">
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo-circle"></div>
+        <div class="sidebar-title-block">
+          <div class="sidebar-title">Data Science Studio</div>
+          <div class="sidebar-subtitle">ML Workflow</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <button class="sidebar-item sidebar-item-active" data-section="section-preview">
+          <img src="static/icons/preview.svg" alt="" class="sidebar-icon" />
+          <span>Preview</span>
+        </button>
+        <button class="sidebar-item" data-section="section-profile">
+          <img src="static/icons/profile.svg" alt="" class="sidebar-icon" />
+          <span>Automated Profile</span>
+        </button>
+        <button class="sidebar-item" data-section="section-data">
+          <img src="static/icons/data.svg" alt="" class="sidebar-icon" />
+          <span>Data</span>
+        </button>
+        <button class="sidebar-item" data-section="section-clean">
+          <img src="static/icons/clean.svg" alt="" class="sidebar-icon" />
+          <span>Clean</span>
+        </button>
+        <button class="sidebar-item" data-section="section-analyze">
+          <img src="static/icons/analyze.svg" alt="" class="sidebar-icon" />
+          <span>Analyze</span>
+        </button>
+        <button class="sidebar-item" data-section="section-build-model">
+          <img src="static/icons/model.svg" alt="" class="sidebar-icon" />
+          <span>Build Model</span>
+        </button>
+        <button class="sidebar-item" data-section="section-logs">
+          <img src="static/icons/logs.svg" alt="" class="sidebar-icon" />
+          <span>Logs</span>
+        </button>
+        <button class="sidebar-item" data-section="section-export">
+          <img src="static/icons/export.svg" alt="" class="sidebar-icon" />
+          <span>Export</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="app-main" aria-live="polite">
+      <!-- Global alerts -->
+      <div id="alert-error" class="alert alert-error" role="alert" aria-live="assertive"></div>
+      <div id="alert-info" class="alert alert-info" role="status"></div>
+
+      <!-- Preview + Upload Section -->
+      <section id="section-preview" class="section">
+        <div class="card card-large card-centered">
+          <div class="upload-icon-circle">
+            <span class="upload-icon-folder"></span>
+          </div>
+          <h1 class="card-title-xl">Upload Dataset</h1>
+          <p class="card-description">
+            Choose a CSV file from your computer to begin exploring, profiling, and cleaning your data.
+          </p>
+          <div class="upload-controls">
+            <input id="upload-input" type="file" accept=".csv,.xlsx,.xls" class="upload-input" />
+            <button id="upload-button" class="btn btn-primary">Upload &amp; Preview</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2 class="card-title">Preview</h2>
+              <p class="card-subtitle">First 50 rows of your uploaded dataset.</p>
+            </div>
+            <div id="preview-meta" class="preview-meta"></div>
+          </div>
+          <div id="preview-table-wrapper" class="table-wrapper">
+            <!-- Table rendered via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Automated Profile Section -->
+      <section id="section-profile" class="section" style="display: none;">
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2 class="card-title">Automated Profile</h2>
+              <p class="card-subtitle">Generate a rich exploratory report for your dataset.</p>
+            </div>
+            <button id="generate-profile" class="btn btn-primary">
+              Generate Profile
+            </button>
+          </div>
+          <div class="profile-placeholder">
+            <p class="placeholder-title">No profile generated yet</p>
+            <p class="placeholder-description">
+              Click &ldquo;Generate Profile&rdquo; to create an interactive HTML report summarizing your dataset.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Data Section (UI only, no backend bindings yet) -->
+      <section id="section-data" class="section" style="display: none;">
+        <div class="card">
+          <h2 class="card-title">Column Types Management</h2>
+          <p class="card-subtitle">
+            This view is a placeholder. Column type editing will be hooked into the backend when available.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Column Renaming</h2>
+          <p class="card-subtitle">
+            Renaming controls will appear here once the corresponding API is exposed.
+          </p>
+        </div>
+      </section>
+
+      <!-- Clean Section -->
+      <section id="section-clean" class="section" style="display: none;">
+        <!-- Duplicate Removal (UI only for now) -->
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2 class="card-title">Duplicate Removal</h2>
+              <p class="card-subtitle">
+                Quickly remove exact duplicate rows to keep your dataset tidy.
+              </p>
+            </div>
+            <button id="remove-duplicates" class="btn" disabled>
+              Remove Duplicates (coming soon)
+            </button>
+          </div>
+        </div>
+
+        <!-- Drop Columns (UI only for now) -->
+        <div class="card">
+          <h2 class="card-title">Drop Columns</h2>
+          <p class="card-subtitle">
+            Column drop actions will be wired once the cleaning API surface is stabilized.
+          </p>
+        </div>
+
+        <!-- Encoding (UI only for now) -->
+        <div class="card">
+          <h2 class="card-title">Encoding</h2>
+          <p class="card-subtitle">
+            Encoding options will be enabled as the backend encoding endpoints are finalized.
+          </p>
+        </div>
+
+        <!-- Missing Value Summary (uses existing backend) -->
+        <div class="card">
+          <h2 class="card-title">Missing Values</h2>
+          <p class="card-subtitle">
+            Review the missingness pattern for each column based on the current dataset.
+          </p>
+          <div id="missing-values-wrapper" class="missing-values-grid">
+            <!-- Missing values per-column controls rendered via JS -->
+          </div>
+        </div>
+
+        <!-- Feature Scaling (UI only for now) -->
+        <div class="card">
+          <h2 class="card-title">Feature Scaling</h2>
+          <p class="card-subtitle">
+            Scaling controls will be activated once scaling APIs are available.
+          </p>
+        </div>
+      </section>
+
+      <!-- Analyze Section (reuses profile generation) -->
+      <section id="section-analyze" class="section" style="display: none;">
+        <div class="card">
+          <h2 class="card-title">Analyze</h2>
+          <p class="card-subtitle">
+            Generate a profiling report for deeper analysis of your dataset.
+          </p>
+          <div class="analyze-controls">
+            <button id="generate-plot" class="btn btn-primary">Generate Profile Report</button>
+          </div>
+        </div>
+
+        <div class="card card-plot">
+          <div class="card-header-row">
+            <div>
+              <h2 class="card-title">Insights</h2>
+              <p class="card-subtitle">
+                Downloaded profiling reports contain distributions, correlations, and data quality checks.
+              </p>
+            </div>
+          </div>
+          <div class="plot-placeholder">
+            <p class="placeholder-title">No profile generated yet</p>
+            <p class="placeholder-description">
+              Click &ldquo;Generate Profile Report&rdquo; to save an HTML report to your computer.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Build Model Section (placeholder) -->
+      <section id="section-build-model" class="section" style="display: none;">
+        <div class="card">
+          <h2 class="card-title">Build Model</h2>
+          <p class="card-subtitle">
+            Configure your target, select features, and train baseline models. This area is ready to connect to your modeling APIs.
+          </p>
+          <div class="build-model-placeholder">
+            <p class="placeholder-title">Modeling workspace</p>
+            <p class="placeholder-description">
+              Hook this section into your backend to run experiments, track metrics, and promote the best models.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Logs Section (static placeholder) -->
+      <section id="section-logs" class="section" style="display: none;">
+        <div class="card">
+          <h2 class="card-title">Logs</h2>
+          <p class="card-subtitle">
+            A summarized logs view will be added here when a logs API is available.
+          </p>
+          <div id="logs-list" class="logs-list">
+            <p class="placeholder-description">No logs API is configured yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Export Section -->
+      <section id="section-export" class="section" style="display: none;">
+        <div class="card">
+          <h2 class="card-title">Export</h2>
+          <p class="card-subtitle">
+            Download cleaned data or share artifacts with downstream consumers.
+          </p>
+          <div class="export-controls">
+            <div class="form-group">
+              <label for="export-format" class="field-label">Format</label>
+              <select id="export-format" class="field-input">
+                <option value="csv">CSV</option>
+                <option value="parquet">Parquet</option>
+              </select>
+            </div>
+            <button id="export-dataset" class="btn btn-primary">Export Dataset</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="static/js/events.js"></script>
 </body>
 </html>

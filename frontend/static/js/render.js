@@ -1,320 +1,239 @@
-function renderPreview(container, preview) {
+// Rendering helpers for the vanilla dashboard UI
+
+export function renderPreviewTable(container, preview) {
+  if (!container) return;
   const { data = [], columns = [] } = preview || {};
   container.innerHTML = "";
+
+  if (!columns.length) {
+    const empty = document.createElement("p");
+    empty.className = "placeholder-description";
+    empty.textContent = "Upload a dataset to see a preview table.";
+    container.appendChild(empty);
+    return;
+  }
+
   const table = document.createElement("table");
-  table.className = "min-w-full text-sm";
+  table.className = "ds-table";
+
   const thead = document.createElement("thead");
-  const trh = document.createElement("tr");
-  columns.forEach((c) => {
+  const headRow = document.createElement("tr");
+  columns.forEach((col) => {
     const th = document.createElement("th");
-    th.className = "border px-2 py-1";
-    th.textContent = c;
-    trh.appendChild(th);
+    th.textContent = col;
+    headRow.appendChild(th);
   });
-  thead.appendChild(trh);
+  thead.appendChild(headRow);
+
   const tbody = document.createElement("tbody");
   data.forEach((row) => {
     const tr = document.createElement("tr");
-    columns.forEach((c) => {
+    columns.forEach((col) => {
       const td = document.createElement("td");
-      td.className = "border px-2 py-1";
-      td.textContent = row[c];
+      td.textContent = row[col];
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
   });
+
   table.appendChild(thead);
   table.appendChild(tbody);
   container.appendChild(table);
 }
 
-function renderMetadata(container, meta) {
-  container.textContent = `Rows: ${meta.total_rows} | Columns: ${meta.total_columns}`;
+export function renderPreviewMeta(container, meta) {
+  if (!container || !meta) return;
+  container.textContent = `Rows: ${meta.total_rows ?? "-"} • Columns: ${meta.total_columns ?? "-"}`;
 }
 
-function renderError(container, message) {
-  container.textContent = message || "Unknown error";
-  container.classList.remove("hidden");
-}
-
-function clearError(container) {
-  container.textContent = "";
-  container.classList.add("hidden");
-}
-
-function showSection(id) {
-  const sections = document.querySelectorAll(".dashboard-section");
-  sections.forEach((s) => {
-    if (s.id === id) s.classList.remove("hidden"); else s.classList.add("hidden");
-  });
-}
-
-function setActiveSidebar(targetId) {
-  const items = document.querySelectorAll(".sidebar-item");
-  items.forEach((i) => {
-    if (i.dataset.target === targetId) i.classList.add("active"); else i.classList.remove("active");
-  });
-}
-
-function renderCleanDatasetInfo(container, missingSummary, columns) {
+export function renderDatatypeTable(container, columns) {
+  if (!container) return;
   container.innerHTML = "";
-  if (!columns || columns.length === 0) {
+  const cols = columns || [];
+  if (!cols.length) {
     const p = document.createElement("p");
-    p.textContent = "Upload a dataset to enable cleaning";
+    p.className = "placeholder-description";
+    p.textContent = "Upload a dataset to configure column types.";
     container.appendChild(p);
     return;
   }
+
   const table = document.createElement("table");
-  table.className = "min-w-full text-sm";
+  table.className = "ds-table";
+
   const thead = document.createElement("thead");
-  const trh = document.createElement("tr");
-  ["Column", "Type", "Missing"].forEach((c) => {
+  const headRow = document.createElement("tr");
+  ["Column", "Current type", "Non-null", "New type"].forEach((label) => {
     const th = document.createElement("th");
-    th.className = "border px-2 py-1";
-    th.textContent = c;
-    trh.appendChild(th);
+    th.textContent = label;
+    headRow.appendChild(th);
   });
-  thead.appendChild(trh);
+  thead.appendChild(headRow);
+
   const tbody = document.createElement("tbody");
-  const missingMap = {};
-  (missingSummary || []).forEach((m) => { missingMap[m.column_name] = m.missing_count; });
-  let typeMap = {};
-  const profileInfo = window.appState.profileColumnInfo;
-  if (Array.isArray(profileInfo)) {
-    profileInfo.forEach((row) => {
-      if (row && row.Column) typeMap[row.Column] = row.Dtype;
-    });
-  }
-  columns.forEach((c) => {
+  cols.forEach((col) => {
     const tr = document.createElement("tr");
-    const td1 = document.createElement("td");
-    td1.className = "border px-2 py-1";
-    td1.textContent = c;
-    const tdType = document.createElement("td");
-    tdType.className = "border px-2 py-1";
-    tdType.textContent = typeMap[c] || "";
-    const td2 = document.createElement("td");
-    td2.className = "border px-2 py-1";
-    td2.textContent = missingMap[c] != null ? missingMap[c] : 0;
-    tr.appendChild(td1);
-    tr.appendChild(tdType);
-    tr.appendChild(td2);
+
+    const nameTd = document.createElement("td");
+    nameTd.textContent = col.name;
+
+    const typeTd = document.createElement("td");
+    typeTd.textContent = col.current_type;
+
+    const nonNullTd = document.createElement("td");
+    nonNullTd.textContent = col.non_null_count;
+
+    const newTypeTd = document.createElement("td");
+    const select = document.createElement("select");
+    select.className = "field-input field-input-inline";
+    select.dataset.columnName = col.name;
+    ["int64", "float64", "object", "bool", "datetime64[ns]"].forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt;
+      option.textContent = opt;
+      if (opt === col.current_type) option.selected = true;
+      select.appendChild(option);
+    });
+    newTypeTd.appendChild(select);
+
+    tr.appendChild(nameTd);
+    tr.appendChild(typeTd);
+    tr.appendChild(nonNullTd);
+    tr.appendChild(newTypeTd);
     tbody.appendChild(tr);
   });
+
   table.appendChild(thead);
   table.appendChild(tbody);
   container.appendChild(table);
 }
 
-function populateSelect(selectEl, options) {
-  selectEl.innerHTML = "";
-  (options || []).forEach((opt) => {
-    const o = document.createElement("option");
-    o.value = opt;
-    o.textContent = opt;
-    selectEl.appendChild(o);
+export function renderRenameControls(container, columns) {
+  if (!container) return;
+  container.innerHTML = "";
+  const cols = columns || [];
+  if (!cols.length) {
+    const p = document.createElement("p");
+    p.className = "placeholder-description";
+    p.textContent = "Upload a dataset to rename columns.";
+    container.appendChild(p);
+    return;
+  }
+
+  cols.forEach((col) => {
+    const row = document.createElement("div");
+    row.className = "rename-row";
+
+    const label = document.createElement("div");
+    label.className = "rename-label";
+    label.textContent = col.name;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "field-input";
+    input.placeholder = "New name";
+    input.value = col.name;
+    input.dataset.columnName = col.name;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-secondary";
+    button.textContent = "Rename";
+    button.dataset.columnName = col.name;
+
+    row.appendChild(label);
+    row.appendChild(input);
+    row.appendChild(button);
+
+    container.appendChild(row);
   });
 }
 
-function populateMultiSelect(selectEl, options) {
-  populateSelect(selectEl, options);
-}
+export function renderMissingValues(container, missingSummary) {
+  if (!container) return;
+  container.innerHTML = "";
+  const rows = missingSummary || [];
+  if (!rows.length) {
+    const p = document.createElement("p");
+    p.className = "placeholder-description";
+    p.textContent = "No missing value information available. Upload a dataset first.";
+    container.appendChild(p);
+    return;
+  }
 
-function renderInfo(container, message) {
-  container.textContent = message;
-  container.classList.remove("hidden");
-  container.classList.add("text-green-700");
-}
+  rows.forEach((row) => {
+    const line = document.createElement("div");
+    line.className = "missing-row";
 
-function clearInfo(container) {
-  container.textContent = "";
-  container.classList.add("hidden");
-  container.classList.remove("text-green-700");
-}
+    const name = document.createElement("div");
+    name.className = "missing-name";
+    name.textContent = row.column_name;
 
-function renderCheckpointsSelect(selectEl, checkpoints) {
-  selectEl.innerHTML = "";
-  const optFinal = document.createElement("option");
-  optFinal.value = "final";
-  optFinal.textContent = "Final Dataset";
-  selectEl.appendChild(optFinal);
-  checkpoints.forEach((cp) => {
-    const o = document.createElement("option");
-    o.value = cp.id;
-    o.textContent = `${cp.id} (${cp.rows}x${cp.columns})`;
-    selectEl.appendChild(o);
+    const stats = document.createElement("div");
+    stats.className = "missing-stats";
+    stats.textContent = `${row.missing_count} missing (${row.missing_ratio ?? "-"}%)`;
+
+    const select = document.createElement("select");
+    select.className = "field-input field-input-inline";
+    select.dataset.columnName = row.column_name;
+    [
+      "Leave as-is",
+      "Drop rows",
+      "Drop column",
+      "Fill with mean",
+      "Fill with median",
+      "Fill with mode",
+    ].forEach((label) => {
+      const option = document.createElement("option");
+      option.value = label;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+
+    line.appendChild(name);
+    line.appendChild(stats);
+    line.appendChild(select);
+    container.appendChild(line);
   });
 }
 
-function setCleanActive(active) {
-  const cards = document.querySelectorAll("#cleanSection .card");
-  cards.forEach((c) => {
-    if (active) c.classList.remove("inactive-card"); else c.classList.add("inactive-card");
+export function renderLogs(container, logs) {
+  if (!container) return;
+  container.innerHTML = "";
+  const entries = logs || [];
+  if (!entries.length) {
+    const p = document.createElement("p");
+    p.className = "placeholder-description";
+    p.textContent = "No recent log entries.";
+    container.appendChild(p);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "log-row";
+
+    const icon = document.createElement("div");
+    icon.className = "log-icon";
+
+    const text = document.createElement("div");
+    text.className = "log-text";
+
+    const title = document.createElement("div");
+    title.className = "log-title";
+    title.textContent = entry.message || "Log entry";
+
+    const meta = document.createElement("div");
+    meta.className = "log-meta";
+    const ts = entry.timestamp || "";
+    const level = (entry.level || "info").toUpperCase();
+    meta.textContent = `${ts} • ${level}`;
+
+    text.appendChild(title);
+    text.appendChild(meta);
+
+    row.appendChild(icon);
+    row.appendChild(text);
+    container.appendChild(row);
   });
 }
-
-function setButtonLoading(btn, loadingText) {
-  if (!btn) return;
-  btn.disabled = true;
-  if (typeof loadingText === "string") btn.textContent = loadingText;
-}
-
-function resetButton(btn, normalText) {
-  if (!btn) return;
-  btn.disabled = false;
-  if (typeof normalText === "string") btn.textContent = normalText;
-}
-
-function renderStage(stage) {
-  const content = document.querySelector("#content");
-  if (!content) return;
-  content.innerHTML = "";
-  if (stage === "upload") {
-    content.innerHTML = `
-      <section id="uploadSection" class="dashboard-section">
-        <div class="card">
-          <h2>Upload</h2>
-          <div class="flex gap-2 items-center">
-            <input id="fileInput" type="file" accept=".csv,.xlsx,.xls" />
-            <button id="uploadBtn" class="btn btn-primary">Upload & Preview</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Preview</h2>
-          <div id="metaBox" class="mb-2 text-sm"></div>
-          <div id="preview" class="table-container"></div>
-        </div>
-      </section>
-    `;
-    return;
-  }
-  if (stage === "clean") {
-    content.innerHTML = `
-      <section id="cleanSection" class="dashboard-section clean-section">
-        <div class="card">
-          <h2>Missing Values</h2>
-          <div id="cleanDatasetInfo" class="mb-3"></div>
-          <div class="space-y-2">
-            <button id="dropRowsMissingBtn" class="btn">Drop rows with missing</button>
-            <button id="dropColsMissingBtn" class="btn">Drop columns with missing</button>
-            <div class="flex gap-2 items-center">
-              <select id="fillMethod">
-                <option value="mean">Mean</option>
-                <option value="median">Median</option>
-                <option value="mode">Mode</option>
-                <option value="drop">Drop</option>
-                <option value="constant">Constant</option>
-              </select>
-              <select id="fillColumns" multiple size="4" class="flex-1"></select>
-              <input id="fillConstant" type="text" placeholder="Constant value" />
-              <button id="fillMissingBtn" class="btn btn-primary">Apply fill</button>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Duplicates</h2>
-          <button id="removeDuplicatesBtn" class="btn">Remove duplicates</button>
-        </div>
-        <div class="card">
-          <h2>Column Operations</h2>
-          <div class="flex gap-2 items-center mb-2">
-            <select id="dropColumnsSelect" multiple size="4" class="flex-1"></select>
-            <button id="dropColumnsBtn" class="btn">Drop Columns</button>
-          </div>
-          <div class="flex gap-2 items-center">
-            <select id="renameSelect"></select>
-            <input id="renameNew" type="text" placeholder="New name" />
-            <button id="renameBtn" class="btn">Rename</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Data Type Conversion</h2>
-          <div class="flex gap-2 items-center">
-            <select id="dtypeColumn"></select>
-            <select id="dtypeNew">
-              <option value="int64">int64</option>
-              <option value="float64">float64</option>
-              <option value="object">object</option>
-              <option value="datetime64[ns]">datetime64[ns]</option>
-            </select>
-            <button id="changeTypeBtn" class="btn">Convert</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Encoding</h2>
-          <div class="flex gap-2 items-center mb-2">
-            <select id="labelSelect" multiple size="4" class="flex-1"></select>
-            <button id="labelEncodeBtn" class="btn">Label Encode</button>
-          </div>
-          <div class="flex gap-2 items-center">
-            <select id="onehotSelect" multiple size="4" class="flex-1"></select>
-            <button id="onehotEncodeBtn" class="btn">One-Hot Encode</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Scaling</h2>
-          <div class="flex gap-2 items-center">
-            <select id="scaleSelect" multiple size="4" class="flex-1"></select>
-            <select id="scaleMethod">
-              <option value="standard">StandardScaler</option>
-              <option value="minmax">MinMaxScaler</option>
-            </select>
-            <button id="scaleBtn" class="btn">Scale</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Outliers</h2>
-          <p>Not implemented yet.</p>
-        </div>
-        <div class="card">
-          <h2>Save Dataset (Checkpoint)</h2>
-          <div class="flex gap-2 items-center">
-            <input id="checkpointDesc" type="text" placeholder="Description (optional)" class="flex-1" />
-            <button id="saveCheckpointBtn" class="btn btn-primary">Save Dataset</button>
-          </div>
-        </div>
-      </section>
-    `;
-    return;
-  }
-  if (stage === "analyze") {
-    content.innerHTML = `
-      <section id="analyzeSection" class="dashboard-section">
-        <div class="card">
-          <h2>Analyze</h2>
-          <button id="profileBtn" class="btn btn-primary">Generate Data Profile</button>
-        </div>
-      </section>
-    `;
-    return;
-  }
-  if (stage === "model") {
-    content.innerHTML = `
-      <section id="modelSection" class="dashboard-section">
-        <div class="card">
-          <h2>Model</h2>
-          <p>Modeling will be enabled in later iterations.</p>
-        </div>
-      </section>
-    `;
-    return;
-  }
-  if (stage === "export") {
-    content.innerHTML = `
-      <section id="exportSection" class="dashboard-section">
-        <div class="card">
-          <h2>Export</h2>
-          <div class="flex gap-2 items-center">
-            <select id="exportSource">
-              <option value="final">Final Dataset</option>
-            </select>
-            <button id="exportBtn" class="btn btn-primary">Download CSV</button>
-          </div>
-        </div>
-      </section>
-    `;
-    return;
-  }
-}
-
-window.render = { renderPreview, renderMetadata, renderError, clearError, showSection, setActiveSidebar, renderCheckpointsSelect, renderCleanDatasetInfo, populateSelect, populateMultiSelect, renderInfo, clearInfo, setCleanActive, setButtonLoading, resetButton, renderStage };
