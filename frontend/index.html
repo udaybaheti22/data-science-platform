@@ -16,7 +16,7 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const API_BASE_URL = "http://127.0.0.1:8001";
+        const API_BASE_URL = "http://127.0.0.1:8000";
 
         // Reusable Components
         const Card = ({ children, className = "" }) => (
@@ -2604,8 +2604,9 @@
             );
         };
 
-        // Render the app
-        ReactDOM.render(<App />, document.getElementById('root'));
+        // Render the app (React 18)
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html> 
