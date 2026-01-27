@@ -19,13 +19,10 @@ The sidebar contains the following sections. Only features backed by existing ba
   - Calls `POST /api/upload`, then `GET /api/data/preview?limit=50`
   - Renders a table preview and basic metadata (rows / columns)
 
-- **Automated Profile** (functional)
-  - **Generate Profile** button calls `GET /api/data/profile_report`
-  - Downloads an HTML profiling report (`data_profile_report.html`)
-
-- **Data** (placeholder)
-  - Static cards describing future column type and renaming tools
-  - No backend calls; safe to click, nothing breaks
+- **Data** (functional)
+  - **Column Types Management** table with per-row data type conversion
+  - Allows changing column data types with inline error handling
+  - Each row has a dropdown for target type and Save button
 
 - **Clean** (partially functional)
   - **Missing Values** card:
@@ -33,9 +30,9 @@ The sidebar contains the following sections. Only features backed by existing ba
     - Renders per-column missing counts/ratios in a list
   - All other clean operations (duplicates, drop columns, encoding, scaling) are **UI-only placeholders** until their APIs are implemented
 
-- **Analyze** (functional, reuses profile)
+- **Analyze** (functional)
   - **Generate Profile Report** button calls `GET /api/data/profile_report`
-  - Same behavior as **Automated Profile**; convenient second entry point
+  - Opens comprehensive HTML profiling report in new browser tab (Jupyter-like behavior)
 
 - **Build Model** (placeholder)
   - Describes a future modeling workspace
@@ -102,14 +99,14 @@ Because the frontend is pure HTML/JS, there is **no build step**.
 ## Effective Single-Page Workflow
 
 - **1. Upload**: Go to **Preview**, upload a dataset, and confirm that the preview table and metadata load.
-- **2. Profile**: Use **Automated Profile** or **Analyze** to generate and download an HTML profile report.
-- **3. Inspect Missingness**: Navigate to **Clean** to see the Missing Values summary (backed by `/api/data/missing_summary`).
-- **4. Export**: Use **Export** to download the current dataset in CSV or Parquet format.
+- **2. Profile**: Use **Analyze** to generate an HTML profile report that opens in a new browser tab.
+- **3. Data Types**: Navigate to **Data** to see column types and change them using the per-row dropdowns and Save buttons.
+- **4. Inspect Missingness**: Navigate to **Clean** to see the Missing Values summary (backed by `/api/data/missing_summary`).
+- **5. Export**: Use **Export** to download the current dataset in CSV or Parquet format.
 
 All other UI elements are designed and styled but intentionally **do not** call the backend until the corresponding APIs are implemented.
 
 ## Current Limitations
 
 - In-memory storage only; no database
-- Undo is disabled during the refactor
 - Many cleaning and modeling controls are visual placeholders pending backend support

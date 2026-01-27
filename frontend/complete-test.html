@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Functionality Test</title>
+    <link rel="stylesheet" href="static/css/main.css">
+    <link rel="stylesheet" href="static/css/sidebar.css">
+    <link rel="stylesheet" href="static/css/cards.css">
+</head>
+<body>
+    <div style="padding: 20px;">
+        <h1>Complete Functionality Test</h1>
+        
+        <div class="card">
+            <h2>Test Workflow</h2>
+            <p>This tests the complete workflow: Upload → Data Types → Profile Generation</p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="step1-upload" class="btn btn-primary">1. Upload Dataset</button>
+                <button id="step2-data" class="btn btn-secondary" disabled>2. Test Data Types</button>
+                <button id="step3-profile" class="btn btn-secondary" disabled>3. Generate Profile</button>
+            </div>
+            
+            <div id="status" style="margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                Status: Ready to start
+            </div>
+        </div>
+        
+        <!-- Upload Section -->
+        <div class="card">
+            <h3>Upload Test</h3>
+            <div id="upload-results">
+                <p>Click "1. Upload Dataset" to test upload functionality</p>
+            </div>
+        </div>
+        
+        <!-- Data Types Section -->
+        <div class="card">
+            <h3>Data Types Test</h3>
+            <div id="column-types-wrapper" class="table-wrapper">
+                <p>Upload a dataset first to see column types</p>
+            </div>
+        </div>
+        
+        <!-- Profile Section -->
+        <div class="card">
+            <h3>Profile Generation Test</h3>
+            <div id="profile-results">
+                <p>Upload a dataset first to enable profile generation</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { uploadDataset, getColumnTypes, changeColumnType, getMissingValues, PROFILE_REPORT_URL } from './static/js/api.js';
+        import { renderDatatypeTable, renderMissingValues } from './static/js/render.js';
+        
+        const statusDiv = document.getElementById('status');
+        const step1Btn = document.getElementById('step1-upload');
+        const step2Btn = document.getElementById('step2-data');
+        const step3Btn = document.getElementById('step3-profile');
+        
+        const uploadResults = document.getElementById('upload-results');
+        const columnTypesWrapper = document.getElementById('column-types-wrapper');
+        const profileResults = document.getElementById('profile-results');
+        
+        function updateStatus(message) {
+            statusDiv.textContent = `Status: ${message}`;
+            console.log(`🧪 ${message}`);
+        }
+        
+        // Comprehensive test data
+        const testCsvData = `name,age,salary,department,is_manager,join_date,rating
+Alice,25,50000.5,Engineering,true,2023-01-15,4.8
+Bob,30,60000.0,Marketing,false,2022-06-20,4.2
+Charlie,35,70000.25,Engineering,true,2021-03-10,4.9
+Diana,28,55000.75,Sales,false,2023-08-05,4.1
+Eve,32,65000.0,Marketing,false,2022-11-12,4.6
+Frank,29,58000.5,Engineering,false,2023-02-28,4.3
+Grace,31,62000.25,Sales,true,2022-09-15,4.7
+Henry,27,52000.0,Marketing,false,2023-05-10,3.9
+Ivy,33,68000.75,Engineering,true,2021-12-01,4.8
+Jack,26,51000.0,Sales,false,2023-07-20,4.0`;
+        
+        // Step 1: Upload Dataset
+        step1Btn.addEventListener('click', async () => {
+            try {
+                updateStatus('Step 1: Uploading test dataset...');
+                
+                // Create and upload file
+                const blob = new Blob([testCsvData], { type: 'text/csv' });
+                const file = new File([blob], 'test_data.csv', { type: 'text/csv' });
+                
+                const uploadResult = await uploadDataset(file);
+                
+                uploadResults.innerHTML = `
+                    <div style="color: green;">
+                        ✅ Upload Successful!<br>
+                        📊 Rows: ${uploadResult.rows}<br>
+                        📋 Columns: ${uploadResult.columns}<br>
+                        📁 Filename: ${uploadResult.filename}
+                    </div>
+                `;
+                
+                updateStatus('Step 1 complete: Dataset uploaded successfully');
+                step2Btn.disabled = false;
+                step3Btn.disabled = false;
+                
+                // Automatically load data for sections (like the real app should do)
+                updateStatus('Preloading data for Clean and Data sections...');
+                
+                try {
+                    // Preload column types
+                    const columns = await getColumnTypes();
+                    renderDatatypeTable(columnTypesWrapper, columns);
+                    console.log(`✅ Preloaded ${columns.length} columns for Data section`);
+                    
+                    // Preload missing values
+                    const missingValues = await getMissingValues();
+                    console.log(`✅ Preloaded missing values for ${missingValues.length} columns`);
+                    
+                    updateStatus('Step 1 complete: All sections ready!');
+                    
+                } catch (preloadError) {
+                    console.warn('⚠️ Preload failed:', preloadError);
+                    updateStatus('Step 1 complete: Upload successful, but preload failed');
+                }
+                
+            } catch (error) {
+                uploadResults.innerHTML = `
+                    <div style="color: red;">
+                        ❌ Upload Failed!<br>
+                        Error: ${error.message}
+                    </div>
+                `;
+                updateStatus(`Step 1 failed: ${error.message}`);
+                console.error('❌ Upload error:', error);
+            }
+        });
+        
+        // Step 2: Test Data Types
+        step2Btn.addEventListener('click', async () => {
+            try {
+                updateStatus('Step 2: Testing data type conversion...');
+                
+                // Test converting age from int64 to float64
+                const result = await changeColumnType('age', 'float64');
+                
+                // Reload the table to show the change
+                const columns = await getColumnTypes();
+                renderDatatypeTable(columnTypesWrapper, columns);
+                
+                updateStatus('Step 2 complete: Data type conversion successful');
+                
+            } catch (error) {
+                updateStatus(`Step 2 failed: ${error.message}`);
+                console.error('❌ Data type error:', error);
+            }
+        });
+        
+        // Step 3: Test Profile Generation
+        step3Btn.addEventListener('click', () => {
+            try {
+                updateStatus('Step 3: Opening profile report...');
+                
+                profileResults.innerHTML = `
+                    <div>
+                        🔗 Profile URL: <code>${PROFILE_REPORT_URL}</code><br>
+                        <button id="open-profile-btn" class="btn btn-primary" style="margin-top: 10px;">
+                            Open Profile Report in New Tab
+                        </button>
+                    </div>
+                `;
+                
+                document.getElementById('open-profile-btn').addEventListener('click', () => {
+                    const newWindow = window.open(PROFILE_REPORT_URL, '_blank');
+                    if (newWindow) {
+                        updateStatus('Step 3 complete: Profile opened in new tab');
+                        profileResults.innerHTML += '<div style="color: green; margin-top: 10px;">✅ Profile report opened successfully!</div>';
+                    } else {
+                        updateStatus('Step 3 failed: Could not open new tab (popup blocked?)');
+                        profileResults.innerHTML += '<div style="color: red; margin-top: 10px;">❌ Failed to open new tab - check popup blocker</div>';
+                    }
+                });
+                
+                updateStatus('Step 3 ready: Click button to open profile');
+                
+            } catch (error) {
+                updateStatus(`Step 3 failed: ${error.message}`);
+                console.error('❌ Profile error:', error);
+            }
+        });
+        
+        // Wire up the data type table event handlers (same as main app)
+        columnTypesWrapper.addEventListener('click', async (e) => {
+            if (e.target.dataset.action === 'save-type') {
+                const btn = e.target;
+                const colName = btn.dataset.columnName;
+                
+                // Find the row and its components
+                const row = btn.closest("tr");
+                const select = row.querySelector("select");
+                const currentTypeCell = row.querySelector("td[data-current-type]");
+                const errorMsg = row.querySelector(".inline-error-message");
+                
+                if (!select || !currentTypeCell || !errorMsg) {
+                    console.error("Could not find required elements for column:", colName);
+                    return;
+                }
+                
+                const newType = select.value;
+                const currentType = currentTypeCell.dataset.currentType;
+
+                // Clear any existing error message
+                errorMsg.style.display = "none";
+                errorMsg.textContent = "";
+
+                const originalText = btn.textContent;
+                btn.textContent = "Saving...";
+                btn.disabled = true;
+
+                try {
+                    updateStatus(`Converting ${colName} to ${newType}...`);
+                    const result = await changeColumnType(colName, newType);
+                    
+                    // Update the current type display immediately
+                    currentTypeCell.textContent = newType;
+                    currentTypeCell.dataset.currentType = newType;
+                    
+                    // Reset the dropdown to the new current type
+                    select.value = newType;
+                    
+                    // Disable the save button since there's no change now
+                    btn.disabled = true;
+                    btn.className = "btn btn-secondary";
+                    btn.textContent = "Save";
+                    
+                    updateStatus(`✅ Successfully converted ${colName} to ${newType}`);
+                    
+                } catch (err) {
+                    console.error("Error converting column type:", err);
+                    
+                    // Show inline error message for this specific row
+                    errorMsg.textContent = err.message || "Failed to change column type";
+                    errorMsg.style.display = "block";
+                    
+                    // Reset button state
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    btn.className = "btn btn-primary";
+                    
+                    updateStatus(`❌ Error converting ${colName}: ${err.message}`);
+                }
+            }
+        });
+        
+        updateStatus('Ready - Click "1. Upload Dataset" to begin testing');
+        console.log('🧪 Complete test page loaded');
+        console.log('🔗 API Base URL:', PROFILE_REPORT_URL.replace('/api/data/profile_report', ''));
+    </script>
+</body>
+</html>

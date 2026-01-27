@@ -30,10 +30,6 @@
           <img src="static/icons/preview.svg" alt="" class="sidebar-icon" />
           <span>Preview</span>
         </button>
-        <button class="sidebar-item" data-section="section-profile">
-          <img src="static/icons/profile.svg" alt="" class="sidebar-icon" />
-          <span>Automated Profile</span>
-        </button>
         <button class="sidebar-item" data-section="section-data">
           <img src="static/icons/data.svg" alt="" class="sidebar-icon" />
           <span>Data</span>
@@ -78,8 +74,10 @@
             Choose a CSV file from your computer to begin exploring, profiling, and cleaning your data.
           </p>
           <div class="upload-controls">
-            <input id="upload-input" type="file" accept=".csv,.xlsx,.xls" class="upload-input" />
-            <button id="upload-button" class="btn btn-primary">Upload &amp; Preview</button>
+            <input id="upload-input" type="file" accept=".csv,.xlsx,.xls" class="upload-input" style="display: none;" />
+            <button id="choose-file-button" class="btn btn-secondary">Choose File</button>
+            <span id="selected-filename" class="selected-filename">No file selected</span>
+            <button id="upload-button" class="btn btn-primary" disabled>Upload &amp; Preview</button>
           </div>
         </div>
 
@@ -97,41 +95,22 @@
         </div>
       </section>
 
-      <!-- Automated Profile Section -->
-      <section id="section-profile" class="section" style="display: none;">
-        <div class="card">
-          <div class="card-header-row">
-            <div>
-              <h2 class="card-title">Automated Profile</h2>
-              <p class="card-subtitle">Generate a rich exploratory report for your dataset.</p>
-            </div>
-            <button id="generate-profile" class="btn btn-primary">
-              Generate Profile
-            </button>
-          </div>
-          <div class="profile-placeholder">
-            <p class="placeholder-title">No profile generated yet</p>
-            <p class="placeholder-description">
-              Click &ldquo;Generate Profile&rdquo; to create an interactive HTML report summarizing your dataset.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Data Section (UI only, no backend bindings yet) -->
+      <!-- Data Section -->
       <section id="section-data" class="section" style="display: none;">
         <div class="card">
-          <h2 class="card-title">Column Types Management</h2>
+          <h2 class="card-title">Column Management</h2>
           <p class="card-subtitle">
-            This view is a placeholder. Column type editing will be hooked into the backend when available.
+            Rename columns and change data types. Changes are applied immediately per row.
           </p>
+          <div id="column-types-wrapper" class="table-wrapper">
+            <!-- Table rendered via JS -->
+          </div>
         </div>
 
         <div class="card">
-          <h2 class="card-title">Column Renaming</h2>
-          <p class="card-subtitle">
-            Renaming controls will appear here once the corresponding API is exposed.
-          </p>
+          <div id="changes-preview-wrapper" class="table-wrapper">
+            <!-- Changes preview rendered via JS -->
+          </div>
         </div>
       </section>
 
@@ -196,7 +175,7 @@
             Generate a profiling report for deeper analysis of your dataset.
           </p>
           <div class="analyze-controls">
-            <button id="generate-plot" class="btn btn-primary">Generate Profile Report</button>
+            <button id="generate-analyze-report" class="btn btn-primary">Generate Profile Report</button>
           </div>
         </div>
 

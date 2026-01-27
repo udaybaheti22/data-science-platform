@@ -19,6 +19,12 @@ export async function getPreview(limit = 50) {
   return resp.json();
 }
 
+export async function getChangesPreview() {
+  const resp = await fetch(`${API_BASE_URL}/api/data/changes_preview`);
+  if (!resp.ok) throw new Error(await resp.text());
+  return resp.json();
+}
+
 // Column metadata / cleaning
 export async function getColumnTypes() {
   const resp = await fetch(`${API_BASE_URL}/api/data/column_types`);
@@ -42,11 +48,34 @@ export async function getMissingValues() {
   return resp.json();
 }
 
-// Profiling
-export async function generateProfileReport() {
-  const resp = await fetch(`${API_BASE_URL}/api/data/profile_report`);
+export async function changeColumnType(columnName, newType) {
+  const resp = await fetch(`${API_BASE_URL}/api/data/change_type`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ column_name: columnName, new_type: newType }),
+  });
   if (!resp.ok) throw new Error(await resp.text());
   return resp.json();
+}
+
+export async function renameColumn(oldName, newName) {
+  const resp = await fetch(`${API_BASE_URL}/api/data/rename_column`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ old_column_name: oldName, new_column_name: newName }),
+  });
+  if (!resp.ok) throw new Error(await resp.text());
+  return resp.json();
+}
+
+// Profiling
+export const PROFILE_REPORT_URL = `${API_BASE_URL}/api/data/profile_report`;
+
+export async function generateProfileReport() {
+  // Deprecated: use window.open(PROFILE_REPORT_URL)
+  const resp = await fetch(PROFILE_REPORT_URL);
+  if (!resp.ok) throw new Error(await resp.text());
+  return resp.blob(); // Changed from json to blob as it returns file now
 }
 
 // Plotting

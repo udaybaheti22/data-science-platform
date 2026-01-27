@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Test</title>
+</head>
+<body>
+    <h1>Frontend Test</h1>
+    <div id="test-output"></div>
+    
+    <script type="module">
+        // Test if modules are loading correctly
+        try {
+            console.log("Testing module imports...");
+            
+            import('./static/js/api.js').then(api => {
+                console.log("✅ api.js loaded successfully");
+                console.log("API_BASE_URL:", api.API_BASE_URL || "Not found");
+                document.getElementById('test-output').innerHTML += "<p>✅ api.js loaded</p>";
+            }).catch(err => {
+                console.error("❌ api.js failed to load:", err);
+                document.getElementById('test-output').innerHTML += "<p>❌ api.js failed: " + err.message + "</p>";
+            });
+            
+            import('./static/js/ui.js').then(ui => {
+                console.log("✅ ui.js loaded successfully");
+                document.getElementById('test-output').innerHTML += "<p>✅ ui.js loaded</p>";
+            }).catch(err => {
+                console.error("❌ ui.js failed to load:", err);
+                document.getElementById('test-output').innerHTML += "<p>❌ ui.js failed: " + err.message + "</p>";
+            });
+            
+            import('./static/js/render.js').then(render => {
+                console.log("✅ render.js loaded successfully");
+                document.getElementById('test-output').innerHTML += "<p>✅ render.js loaded</p>";
+            }).catch(err => {
+                console.error("❌ render.js failed to load:", err);
+                document.getElementById('test-output').innerHTML += "<p>❌ render.js failed: " + err.message + "</p>";
+            });
+            
+            import('./static/js/events.js').then(events => {
+                console.log("✅ events.js loaded successfully");
+                document.getElementById('test-output').innerHTML += "<p>✅ events.js loaded</p>";
+            }).catch(err => {
+                console.error("❌ events.js failed to load:", err);
+                document.getElementById('test-output').innerHTML += "<p>❌ events.js failed: " + err.message + "</p>";
+            });
+            
+        } catch (error) {
+            console.error("❌ Module loading error:", error);
+            document.getElementById('test-output').innerHTML += "<p>❌ Module error: " + error.message + "</p>";
+        }
+    </script>
+</body>
+</html>

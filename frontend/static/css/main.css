@@ -216,6 +216,13 @@ body.app-body {
   background-color: #ffffff;
 }
 
+.selected-filename {
+  font-size: 14px;
+  color: #6b7280;
+  font-style: italic;
+  min-width: 150px;
+}
+
 /* Tables */
 
 .table-wrapper {

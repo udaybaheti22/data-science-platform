@@ -63,7 +63,7 @@ export function renderDatatypeTable(container, columns) {
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  ["Column", "Current type", "Non-null", "New type"].forEach((label) => {
+  ["Column Name", "Current Name", "New Name", "Current Data Type", "Target Data Type", "Action"].forEach((label) => {
     const th = document.createElement("th");
     th.textContent = label;
     headRow.appendChild(th);
@@ -73,17 +73,55 @@ export function renderDatatypeTable(container, columns) {
   const tbody = document.createElement("tbody");
   cols.forEach((col) => {
     const tr = document.createElement("tr");
+    tr.dataset.columnName = col.name;
 
+    // Column Name (static)
     const nameTd = document.createElement("td");
     nameTd.textContent = col.name;
 
+    // Current Name (read-only)
+    const currentNameTd = document.createElement("td");
+    currentNameTd.textContent = col.name;
+    currentNameTd.dataset.currentName = col.name;
+
+    // New Name (text input)
+    const newNameTd = document.createElement("td");
+    const nameWrapper = document.createElement("div");
+    nameWrapper.style.display = "flex";
+    nameWrapper.style.flexDirection = "column";
+    nameWrapper.style.gap = "5px";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "field-input field-input-inline";
+    nameInput.value = col.name;
+    nameInput.dataset.columnName = col.name;
+    nameInput.placeholder = "Enter new name";
+
+    const nameErrorMsg = document.createElement("div");
+    nameErrorMsg.className = "inline-error-message";
+    nameErrorMsg.style.color = "#dc3545";
+    nameErrorMsg.style.fontSize = "12px";
+    nameErrorMsg.style.display = "none";
+    nameErrorMsg.dataset.columnName = col.name;
+    nameErrorMsg.dataset.errorType = "rename";
+
+    nameWrapper.appendChild(nameInput);
+    nameWrapper.appendChild(nameErrorMsg);
+    newNameTd.appendChild(nameWrapper);
+
+    // Current Data Type (read-only)
     const typeTd = document.createElement("td");
     typeTd.textContent = col.current_type;
+    typeTd.dataset.currentType = col.current_type;
 
-    const nonNullTd = document.createElement("td");
-    nonNullTd.textContent = col.non_null_count;
+    // Target Data Type (dropdown)
+    const targetTypeTd = document.createElement("td");
+    const typeWrapper = document.createElement("div");
+    typeWrapper.style.display = "flex";
+    typeWrapper.style.flexDirection = "column";
+    typeWrapper.style.gap = "5px";
 
-    const newTypeTd = document.createElement("td");
     const select = document.createElement("select");
     select.className = "field-input field-input-inline";
     select.dataset.columnName = col.name;
@@ -94,12 +132,78 @@ export function renderDatatypeTable(container, columns) {
       if (opt === col.current_type) option.selected = true;
       select.appendChild(option);
     });
-    newTypeTd.appendChild(select);
+
+    const typeErrorMsg = document.createElement("div");
+    typeErrorMsg.className = "inline-error-message";
+    typeErrorMsg.style.color = "#dc3545";
+    typeErrorMsg.style.fontSize = "12px";
+    typeErrorMsg.style.display = "none";
+    typeErrorMsg.dataset.columnName = col.name;
+    typeErrorMsg.dataset.errorType = "type";
+
+    typeWrapper.appendChild(select);
+    typeWrapper.appendChild(typeErrorMsg);
+    targetTypeTd.appendChild(typeWrapper);
+
+    // Action (two buttons)
+    const actionTd = document.createElement("td");
+    const buttonWrapper = document.createElement("div");
+    buttonWrapper.style.display = "flex";
+    buttonWrapper.style.gap = "5px";
+    buttonWrapper.style.flexDirection = "column";
+
+    // Rename button
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "btn btn-secondary";
+    renameBtn.textContent = "Rename";
+    renameBtn.disabled = true;
+    renameBtn.dataset.columnName = col.name;
+    renameBtn.dataset.action = "save-rename";
+    renameBtn.style.padding = "4px 8px";
+    renameBtn.style.fontSize = "11px";
+
+    // Type change button
+    const typeBtn = document.createElement("button");
+    typeBtn.className = "btn btn-secondary";
+    typeBtn.textContent = "Change Type";
+    typeBtn.disabled = true;
+    typeBtn.dataset.columnName = col.name;
+    typeBtn.dataset.action = "save-type";
+    typeBtn.style.padding = "4px 8px";
+    typeBtn.style.fontSize = "11px";
+
+    // Event listeners for enabling/disabling buttons
+    nameInput.addEventListener("input", () => {
+      const newName = nameInput.value.trim();
+      const isChanged = newName && newName !== col.name;
+      renameBtn.disabled = !isChanged;
+      renameBtn.className = isChanged ? "btn btn-primary" : "btn btn-secondary";
+      
+      // Clear error message when user types
+      nameErrorMsg.style.display = "none";
+      nameErrorMsg.textContent = "";
+    });
+
+    select.addEventListener("change", () => {
+      const isChanged = select.value !== col.current_type;
+      typeBtn.disabled = !isChanged;
+      typeBtn.className = isChanged ? "btn btn-primary" : "btn btn-secondary";
+      
+      // Clear error message when user changes selection
+      typeErrorMsg.style.display = "none";
+      typeErrorMsg.textContent = "";
+    });
+
+    buttonWrapper.appendChild(renameBtn);
+    buttonWrapper.appendChild(typeBtn);
+    actionTd.appendChild(buttonWrapper);
 
     tr.appendChild(nameTd);
+    tr.appendChild(currentNameTd);
+    tr.appendChild(newNameTd);
     tr.appendChild(typeTd);
-    tr.appendChild(nonNullTd);
-    tr.appendChild(newTypeTd);
+    tr.appendChild(targetTypeTd);
+    tr.appendChild(actionTd);
     tbody.appendChild(tr);
   });
 
@@ -236,4 +340,58 @@ export function renderLogs(container, logs) {
     row.appendChild(text);
     container.appendChild(row);
   });
+}
+export function renderChangesPreview(container, previewData) {
+  if (!container) return;
+  
+  const { data = [], columns = [] } = previewData || {};
+  container.innerHTML = "";
+
+  if (!columns.length) {
+    const empty = document.createElement("p");
+    empty.className = "placeholder-description";
+    empty.textContent = "No changes made yet. Make a column change to see the preview.";
+    container.appendChild(empty);
+    return;
+  }
+
+  // Add title
+  const title = document.createElement("h3");
+  title.textContent = `Changes Preview (Random 30 Rows)`;
+  title.style.marginBottom = "10px";
+  container.appendChild(title);
+
+  // Add metadata
+  const meta = document.createElement("p");
+  meta.className = "card-subtitle";
+  meta.textContent = `Showing ${data.length} of ${previewData.total_rows} total rows from modified dataset`;
+  meta.style.marginBottom = "15px";
+  container.appendChild(meta);
+
+  const table = document.createElement("table");
+  table.className = "ds-table";
+
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  columns.forEach((col) => {
+    const th = document.createElement("th");
+    th.textContent = col;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+
+  const tbody = document.createElement("tbody");
+  data.forEach((row) => {
+    const tr = document.createElement("tr");
+    columns.forEach((col) => {
+      const td = document.createElement("td");
+      td.textContent = row[col];
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  container.appendChild(table);
 }

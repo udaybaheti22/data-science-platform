@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Type Test</title>
+    <link rel="stylesheet" href="static/css/main.css">
+    <link rel="stylesheet" href="static/css/cards.css">
+</head>
+<body>
+    <div style="padding: 20px;">
+        <h1>Data Type Management Test</h1>
+        
+        <div class="card">
+            <h2>Column Types Management</h2>
+            <p>Testing the data type conversion functionality</p>
+            
+            <button id="load-data-btn" class="btn btn-primary">Load Test Data</button>
+            <button id="test-conversion-btn" class="btn btn-secondary" disabled>Test Conversion</button>
+            
+            <div id="column-types-wrapper" class="table-wrapper">
+                <!-- Table will be rendered here -->
+            </div>
+            
+            <div id="status" style="margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                Status: Ready
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { getColumnTypes, changeColumnType, uploadDataset } from './static/js/api.js';
+        import { renderDatatypeTable } from './static/js/render.js';
+        
+        const statusDiv = document.getElementById('status');
+        const loadBtn = document.getElementById('load-data-btn');
+        const testBtn = document.getElementById('test-conversion-btn');
+        const container = document.getElementById('column-types-wrapper');
+        
+        function updateStatus(message) {
+            statusDiv.textContent = `Status: ${message}`;
+            console.log(`📊 ${message}`);
+        }
+        
+        // Test data
+        const testCsvData = `name,age,salary,is_manager
+Alice,25,50000,true
+Bob,30,60000,false
+Charlie,35,70000,true`;
+        
+        loadBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('Uploading test data...');
+                
+                // Create a blob from the CSV data
+                const blob = new Blob([testCsvData], { type: 'text/csv' });
+                const file = new File([blob], 'test.csv', { type: 'text/csv' });
+                
+                // Upload the data
+                await uploadDataset(file);
+                updateStatus('Data uploaded successfully');
+                
+                // Load column types
+                updateStatus('Loading column types...');
+                const columns = await getColumnTypes();
+                
+                // Render the table
+                renderDatatypeTable(container, columns);
+                updateStatus(`Loaded ${columns.length} columns`);
+                
+                testBtn.disabled = false;
+                
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`);
+                console.error('❌ Load error:', error);
+            }
+        });
+        
+        testBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('Testing conversion: age -> float64');
+                
+                const result = await changeColumnType('age', 'float64');
+                updateStatus('Conversion successful! Reloading table...');
+                
+                // Reload the table
+                const columns = await getColumnTypes();
+                renderDatatypeTable(container, columns);
+                updateStatus('Table reloaded - check age column type');
+                
+            } catch (error) {
+                updateStatus(`Conversion error: ${error.message}`);
+                console.error('❌ Conversion error:', error);
+            }
+        });
+        
+        // Wire up the table event handlers
+        container.addEventListener('click', async (e) => {
+            if (e.target.dataset.action === 'save-type') {
+                const btn = e.target;
+                const colName = btn.dataset.columnName;
+                
+                // Find the row and its components
+                const row = btn.closest("tr");
+                const select = row.querySelector("select");
+                const currentTypeCell = row.querySelector("td[data-current-type]");
+                const errorMsg = row.querySelector(".inline-error-message");
+                
+                if (!select || !currentTypeCell || !errorMsg) {
+                    console.error("Could not find required elements for column:", colName);
+                    return;
+                }
+                
+                const newType = select.value;
+                const currentType = currentTypeCell.dataset.currentType;
+
+                // Clear any existing error message
+                errorMsg.style.display = "none";
+                errorMsg.textContent = "";
+
+                const originalText = btn.textContent;
+                btn.textContent = "Saving...";
+                btn.disabled = true;
+
+                try {
+                    updateStatus(`Converting ${colName} to ${newType}...`);
+                    const result = await changeColumnType(colName, newType);
+                    
+                    // Update the current type display immediately
+                    currentTypeCell.textContent = newType;
+                    currentTypeCell.dataset.currentType = newType;
+                    
+                    // Reset the dropdown to the new current type
+                    select.value = newType;
+                    
+                    // Disable the save button since there's no change now
+                    btn.disabled = true;
+                    btn.className = "btn btn-secondary";
+                    btn.textContent = "Save";
+                    
+                    updateStatus(`Successfully converted ${colName} to ${newType}`);
+                    
+                } catch (err) {
+                    console.error("Error converting column type:", err);
+                    
+                    // Show inline error message for this specific row
+                    errorMsg.textContent = err.message || "Failed to change column type";
+                    errorMsg.style.display = "block";
+                    
+                    // Reset button state
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    btn.className = "btn btn-primary";
+                    
+                    updateStatus(`Error converting ${colName}: ${err.message}`);
+                }
+            }
+        });
+        
+        updateStatus('Ready - Click "Load Test Data" to begin');
+    </script>
+</body>
+</html>

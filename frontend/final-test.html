@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Functionality Test</title>
+    <link rel="stylesheet" href="static/css/main.css">
+    <link rel="stylesheet" href="static/css/sidebar.css">
+    <link rel="stylesheet" href="static/css/cards.css">
+</head>
+<body>
+    <div style="padding: 20px;">
+        <h1>Final Functionality Test</h1>
+        <p>Testing: File Upload UI + Column Rename + Data Type Change + Changes Preview</p>
+        
+        <!-- Upload Test -->
+        <div class="card">
+            <h2>1. File Upload Test</h2>
+            <div class="upload-controls">
+                <input id="upload-input" type="file" accept=".csv" style="display: none;" />
+                <button id="choose-file-button" class="btn btn-secondary">Choose File</button>
+                <span id="selected-filename" class="selected-filename">No file selected</span>
+                <button id="upload-button" class="btn btn-primary" disabled>Upload & Preview</button>
+            </div>
+            <div id="upload-status" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                Status: Ready to upload
+            </div>
+        </div>
+        
+        <!-- Original Preview -->
+        <div class="card">
+            <h2>2. Original Dataset Preview</h2>
+            <p class="card-subtitle">This should always show the original, unmodified data</p>
+            <div id="original-preview-wrapper" class="table-wrapper">
+                <p>Upload a dataset to see original preview</p>
+            </div>
+        </div>
+        
+        <!-- Column Management -->
+        <div class="card">
+            <h2>3. Column Management</h2>
+            <p class="card-subtitle">Rename columns and change data types</p>
+            <div id="column-types-wrapper" class="table-wrapper">
+                <p>Upload a dataset to see column management</p>
+            </div>
+        </div>
+        
+        <!-- Changes Preview -->
+        <div class="card">
+            <h2>4. Changes Preview (30 Random Rows)</h2>
+            <p class="card-subtitle">Shows modified dataset after changes</p>
+            <div id="changes-preview-wrapper" class="table-wrapper">
+                <p>Make changes to see preview of modified dataset</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { 
+            uploadDataset, 
+            getPreview, 
+            getChangesPreview,
+            getColumnTypes, 
+            changeColumnType, 
+            renameColumn 
+        } from './static/js/api.js';
+        import { 
+            renderPreviewTable, 
+            renderDatatypeTable, 
+            renderChangesPreview 
+        } from './static/js/render.js';
+        
+        const uploadStatus = document.getElementById('upload-status');
+        const chooseFileButton = document.getElementById('choose-file-button');
+        const uploadInput = document.getElementById('upload-input');
+        const selectedFilename = document.getElementById('selected-filename');
+        const uploadButton = document.getElementById('upload-button');
+        
+        const originalPreviewWrapper = document.getElementById('original-preview-wrapper');
+        const columnTypesWrapper = document.getElementById('column-types-wrapper');
+        const changesPreviewWrapper = document.getElementById('changes-preview-wrapper');
+        
+        function updateStatus(message) {
+            uploadStatus.textContent = `Status: ${message}`;
+            console.log(`🧪 ${message}`);
+        }
+        
+        // Test data
+        const testCsvData = `name,age,salary,department,is_manager
+Alice,25,50000.5,Engineering,true
+Bob,30,60000.0,Marketing,false
+Charlie,35,70000.25,Engineering,true
+Diana,28,55000.75,Sales,false
+Eve,32,65000.0,Marketing,false`;
+        
+        // Wire file upload UI
+        chooseFileButton.addEventListener('click', () => {
+            uploadInput.click();
+        });
+        
+        uploadInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFilename.textContent = file.name;
+                selectedFilename.style.color = "#374151";
+                selectedFilename.style.fontStyle = "normal";
+                uploadButton.disabled = false;
+            } else {
+                selectedFilename.textContent = "No file selected";
+                selectedFilename.style.color = "#6b7280";
+                selectedFilename.style.fontStyle = "italic";
+                uploadButton.disabled = true;
+            }
+        });
+        
+        uploadButton.addEventListener('click', async () => {
+            const file = uploadInput.files[0];
+            if (!file) {
+                // Create test file if none selected
+                const blob = new Blob([testCsvData], { type: 'text/csv' });
+                const testFile = new File([blob], 'test_data.csv', { type: 'text/csv' });
+                await handleUpload(testFile);
+            } else {
+                await handleUpload(file);
+            }
+        });
+        
+        async function handleUpload(file) {
+            try {
+                updateStatus('Uploading dataset...');
+                
+                const uploadResult = await uploadDataset(file);
+                updateStatus(`Upload successful: ${uploadResult.rows} rows, ${uploadResult.columns} columns`);
+                
+                // Load original preview
+                updateStatus('Loading original preview...');
+                const originalPreview = await getPreview(50);
+                renderPreviewTable(originalPreviewWrapper, originalPreview);
+                
+                // Load column management
+                updateStatus('Loading column management...');
+                const columns = await getColumnTypes();
+                renderDatatypeTable(columnTypesWrapper, columns);
+                
+                // Initialize empty changes preview
+                renderChangesPreview(changesPreviewWrapper, {
+                    data: [],
+                    columns: [],
+                    total_rows: 0,
+                    preview_rows: 0
+                });
+                
+                updateStatus('Ready! Try renaming columns or changing data types.');
+                
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`);
+                console.error('Upload error:', error);
+            }
+        }
+        
+        // Wire column management events
+        columnTypesWrapper.addEventListener('click', async (e) => {
+            if (e.target.dataset.action === 'save-type') {
+                await handleTypeChange(e.target);
+            } else if (e.target.dataset.action === 'save-rename') {
+                await handleColumnRename(e.target);
+            }
+        });
+        
+        async function handleTypeChange(btn) {
+            const colName = btn.dataset.columnName;
+            const row = btn.closest("tr");
+            const select = row.querySelector("select");
+            const currentTypeCell = row.querySelector("td[data-current-type]");
+            const errorMsg = row.querySelector(".inline-error-message[data-error-type='type']");
+            
+            if (!select || !currentTypeCell || !errorMsg) return;
+            
+            const newType = select.value;
+            const currentType = currentTypeCell.dataset.currentType;
+
+            errorMsg.style.display = "none";
+            errorMsg.textContent = "";
+
+            const originalText = btn.textContent;
+            btn.textContent = "Saving...";
+            btn.disabled = true;
+
+            try {
+                updateStatus(`Converting ${colName} to ${newType}...`);
+                const result = await changeColumnType(colName, newType);
+                
+                // Update UI
+                currentTypeCell.textContent = newType;
+                currentTypeCell.dataset.currentType = newType;
+                select.value = newType;
+                btn.disabled = true;
+                btn.className = "btn btn-secondary";
+                btn.textContent = "Change Type";
+                
+                // Update changes preview
+                if (result.changes_preview) {
+                    renderChangesPreview(changesPreviewWrapper, result.changes_preview);
+                }
+                
+                updateStatus(`✅ Successfully converted ${colName} to ${newType}`);
+                
+            } catch (err) {
+                console.error("Error converting column type:", err);
+                errorMsg.textContent = err.message || "Failed to change column type";
+                errorMsg.style.display = "block";
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.className = "btn btn-primary";
+                updateStatus(`❌ Error converting ${colName}: ${err.message}`);
+            }
+        }
+        
+        async function handleColumnRename(btn) {
+            const colName = btn.dataset.columnName;
+            const row = btn.closest("tr");
+            const nameInput = row.querySelector("input[type='text']");
+            const currentNameCell = row.querySelector("td[data-current-name]");
+            const errorMsg = row.querySelector(".inline-error-message[data-error-type='rename']");
+            
+            if (!nameInput || !currentNameCell || !errorMsg) return;
+            
+            const newName = nameInput.value.trim();
+            const currentName = currentNameCell.dataset.currentName;
+
+            errorMsg.style.display = "none";
+            errorMsg.textContent = "";
+
+            const originalText = btn.textContent;
+            btn.textContent = "Saving...";
+            btn.disabled = true;
+
+            try {
+                updateStatus(`Renaming ${currentName} to ${newName}...`);
+                const result = await renameColumn(currentName, newName);
+                
+                // Update UI
+                currentNameCell.textContent = newName;
+                currentNameCell.dataset.currentName = newName;
+                nameInput.value = newName;
+                row.dataset.columnName = newName;
+                nameInput.dataset.columnName = newName;
+                btn.dataset.columnName = newName;
+                
+                const staticNameCell = row.querySelector("td:first-child");
+                if (staticNameCell) {
+                    staticNameCell.textContent = newName;
+                }
+                
+                btn.disabled = true;
+                btn.className = "btn btn-secondary";
+                btn.textContent = "Rename";
+                
+                // Update changes preview
+                if (result.changes_preview) {
+                    renderChangesPreview(changesPreviewWrapper, result.changes_preview);
+                }
+                
+                updateStatus(`✅ Successfully renamed ${currentName} to ${newName}`);
+                
+            } catch (err) {
+                console.error("Error renaming column:", err);
+                errorMsg.textContent = err.message || "Failed to rename column";
+                errorMsg.style.display = "block";
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.className = "btn btn-primary";
+                updateStatus(`❌ Error renaming ${currentName}: ${err.message}`);
+            }
+        }
+        
+        updateStatus('Ready - Click "Choose File" or "Upload & Preview" to test with sample data');
+        console.log('🧪 Final test page loaded');
+    </script>
+</body>
+</html>
