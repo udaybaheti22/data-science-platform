@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Origins the backend will accept requests from
+      - CORS_ORIGINS=http://localhost:80,http://localhost
+    volumes:
+      # Persist profile reports across container restarts
+      - ./backend/reports:/app/reports
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # VITE_API_URL is baked into the JS bundle at build time
+        # Change this to your backend's public URL for cloud deployment
+        - VITE_API_URL=http://localhost:8000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

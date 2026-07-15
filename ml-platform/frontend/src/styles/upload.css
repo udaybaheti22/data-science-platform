@@ -1,0 +1,63 @@
+.upload-tab {}
+
+.upload-form { margin-bottom: 16px; }
+
+.file-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Hide the native file input, show styled label */
+.file-input-row input[type="file"] {
+  width: 0.1px; height: 0.1px;
+  opacity: 0; overflow: hidden;
+  position: absolute; z-index: -1;
+}
+
+.file-label {
+  display: inline-block;
+  padding: 9px 16px;
+  border: 1.5px dashed var(--color-primary);
+  border-radius: var(--radius);
+  color: var(--color-primary);
+  font-size: .9rem;
+  cursor: pointer;
+  background: #f0f3ff;
+  min-width: 200px;
+  transition: background .15s;
+}
+.file-label:hover { background: #e0e7ff; }
+
+.upload-placeholder {
+  margin-top: 32px;
+  padding: 40px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.upload-preview { margin-top: 20px; }
+
+.dataset-summary {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font-size: .9rem;
+  margin-bottom: 10px;
+}
+.dataset-summary span { color: var(--color-text); }
+
+.assign-header-section {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.assign-header-section small { color: var(--color-muted); font-size: .82rem; }

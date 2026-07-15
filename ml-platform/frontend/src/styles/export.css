@@ -1,0 +1,9 @@
+.export-tab {
+  max-width: 500px;
+}
+
+.export-tab .btn {
+  margin-top: 8px;
+  font-size: 1rem;
+  padding: 12px 28px;
+}

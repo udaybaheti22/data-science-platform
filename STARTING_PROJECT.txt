@@ -1,0 +1,75 @@
+ML PLATFORM — HOW TO START THE PROJECT
+=======================================
+
+PREREQUISITES
+-------------
+- Python 3.10+ installed
+- Node.js 18+ installed
+- Both terminals/command prompts open to this folder
+
+
+STEP 1 — Install backend dependencies (first time only)
+--------------------------------------------------------
+cd ml-platform\backend
+pip install -r requirements.txt
+
+
+STEP 2 — Start the backend
+---------------------------
+cd ml-platform\backend
+
+Windows:
+  set CORS_ORIGINS=http://localhost:5173
+  python -m uvicorn main:app --reload --port 8000
+
+Mac / Linux:
+  CORS_ORIGINS=http://localhost:5173 uvicorn main:app --reload --port 8000
+
+You should see:
+  INFO: Uvicorn running on http://127.0.0.1:8000
+  INFO: Application startup complete.
+
+
+STEP 3 — Install frontend dependencies (first time only)
+---------------------------------------------------------
+cd ml-platform\frontend
+npm install
+
+
+STEP 4 — Start the frontend
+----------------------------
+cd ml-platform\frontend
+npm run dev
+
+You should see:
+  VITE v5.2.0  ready in 700 ms
+  ➜  Local: http://localhost:5173/
+
+
+STEP 5 — Open in browser
+-------------------------
+  App:      http://localhost:5173
+  API docs: http://localhost:8000/docs
+
+
+QUICK WORKFLOW
+--------------
+1. Upload tab   → upload a CSV file
+2. Clean tab    → fix missing values, encode text columns before using ML
+3. Analyze tab  → correlation matrix + ydata-profiling report
+4. Model tab    → pick model, tune hyperparameters, train, view charts
+5. Export tab   → download cleaned dataset
+
+
+NOTES
+-----
+- The .env file (ml-platform/frontend/.env) must contain:
+    VITE_API_URL=http://localhost:8000
+  (already set — do not delete it)
+
+- Text/string columns must be encoded in Clean tab before using as ML features.
+  Use: Label Encode (integers) or One-Hot Encode (binary columns)
+
+- Profile report generation takes 30-60 seconds for large datasets — this is normal.
+
+- One dataset in memory at a time. Uploading a new file replaces the current one.
