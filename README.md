@@ -38,27 +38,16 @@ ml-platform/
 
 ---
 
-## How to start
+## Live Deployment
 
-### 1 — Backend
-```bash
-cd ml-platform/backend
-pip install -r requirements.txt
-set CORS_ORIGINS=http://localhost:5173       # Windows
-# export CORS_ORIGINS=http://localhost:5173  # Mac/Linux
-uvicorn main:app --reload --port 8000
-```
+🚀 **Try the deployed app:** [https://data-science-platform-six.vercel.app/](https://data-science-platform-six.vercel.app/)
 
-### 2 — Frontend
-```bash
-cd ml-platform/frontend
-npm install
-npm run dev
-```
+- **Frontend:** Deployed on Vercel
+- **Backend:** Deployed on Render (free tier)
 
-Open **http://localhost:5173**
+⚠️ **Important:** The backend spins down after 15 minutes of inactivity. The first request after inactivity may take up to 1 minute to respond while the server restarts (cold start).
 
-API docs: **http://localhost:8000/docs**
+> **For local development instructions**, see `STARTING_PROJECT.txt` in the root directory.
 
 ---
 
