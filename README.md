@@ -1,8 +1,8 @@
 # ML Platform
 
-A full-stack data science web app. Upload a CSV, clean it, profile it, train ML models, and export — all in one browser tab.
+A full-stack data science web app. Upload a CSV, clean it, profile it, get AI-powered suggestions, train ML models, and export — all in one browser tab.
 
-**Stack:** FastAPI · React + Vite + TypeScript · scikit-learn · pandas · matplotlib · ydata-profiling
+**Stack:** FastAPI · React + Vite + TypeScript · scikit-learn · pandas · matplotlib · ydata-profiling · Gemini API
 
 ---
 
@@ -14,7 +14,20 @@ A full-stack data science web app. Upload a CSV, clean it, profile it, train ML 
 | **Clean** | Change types, rename columns, fill/drop missing values, remove duplicates, one-hot / label encode |
 | **Analyze** | Pearson correlation matrix heatmap + full ydata-profiling HTML report |
 | **Model** | Train Linear Regression, Decision Tree, or KNN with hyperparameter dropdowns — see metrics + plots |
+| **AI Suggestions** | Select a target column and task type — Gemini AI analyzes the dataset and recommends cleaning operations and optimal model hyperparameters |
 | **Export** | Download the cleaned dataset as CSV |
+
+---
+
+## AI Suggestions feature
+
+The **AI Suggestions** tab uses Google Gemini to analyze your dataset and return structured recommendations:
+
+- **Cleaning suggestions** — per-column actions (fill missing, encode, drop, etc.) with reasons, shown as inline hints in the Clean tab
+- **Model recommendation** — which of the 3 models to use and suggested hyperparameter values, shown as hints in the Model tab
+- Results persist across tab navigation — no need to regenerate after switching tabs
+
+Requires a `GEMINI_API_KEY` environment variable on the backend (see setup instructions in `STARTING_PROJECT.txt`).
 
 ---
 
@@ -31,7 +44,7 @@ ml-platform/
     │   ├── api/client.ts        # All fetch calls
     │   ├── types/api.ts         # TypeScript interfaces
     │   ├── components/          # NavBar, PreviewTable, HyperparamPanel
-    │   ├── tabs/                # UploadTab, CleanTab, AnalyzeTab, ModelTab, ExportTab
+    │   ├── tabs/                # UploadTab, CleanTab, AnalyzeTab, ModelTab, SuggestTab, ExportTab
     │   └── styles/              # Plain CSS per component
     └── .env                     # VITE_API_URL=http://localhost:8000
 ```
@@ -51,15 +64,29 @@ ml-platform/
 
 ---
 
-## ML endpoints
+## API endpoints
 
 ```
-POST /api/model/linear_regression   fit_intercept, test_size
-POST /api/model/decision_tree       max_depth, min_samples_split, criterion, test_size
-POST /api/model/knn                 n_neighbors, weights, metric, test_size
+POST /api/upload
+GET  /api/data/preview
+POST /api/data/assign_header
+GET  /api/data/missing_summary
+GET  /api/data/duplicates_summary
+POST /api/data/change_type
+POST /api/data/rename_column
+POST /api/data/clean              fill_missing, drop_rows_with_missing, remove_duplicates,
+                                  drop_columns, one_hot_encode, label_encode
+GET  /api/data/profile_report
+GET  /api/data/correlation_matrix
+GET  /api/data/export
+POST /api/model/linear_regression  fit_intercept, test_size
+POST /api/model/decision_tree      max_depth, min_samples_split, criterion, test_size
+POST /api/model/knn                n_neighbors, weights, metric, test_size
+POST /api/suggest                  target_column, task_type → Gemini structured JSON
+GET  /api/health
 ```
 
-Each returns `metrics`, optional `viz_base64` (2D plot when ≤ 2 features), and `tree_base64` (Decision Tree only).
+Each model endpoint returns `metrics`, optional `viz_base64` (2D plot when ≤ 2 features), and `tree_base64` (Decision Tree only).
 
 ---
 
@@ -68,3 +95,4 @@ Each returns `metrics`, optional `viz_base64` (2D plot when ≤ 2 features), and
 - Text columns (object dtype) must be encoded in the **Clean tab** before using as model features.
 - Profile report generation can take 30–60 s on large datasets.
 - One dataset in memory at a time. Uploading a new file replaces the current one.
+- Correlation matrix and profile report reset automatically when the dataset is cleaned or replaced.
