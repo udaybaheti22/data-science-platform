@@ -2,12 +2,16 @@ import { useState } from "react";
 import { api } from "../api/client";
 import "../styles/analyze.css";
 
-export default function AnalyzeTab() {
-  const [reportUrl, setReportUrl] = useState<string | null>(null);
+interface AnalyzeTabProps {
+  corrImg: string | null;
+  reportUrl: string | null;
+  onCorrImgChange: (img: string | null) => void;
+  onReportUrlChange: (url: string | null) => void;
+}
+
+export default function AnalyzeTab({ corrImg, reportUrl, onCorrImgChange, onReportUrlChange }: AnalyzeTabProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-
-  const [corrImg, setCorrImg] = useState<string | null>(null);
   const [corrLoading, setCorrLoading] = useState(false);
   const [corrError, setCorrError] = useState<string | null>(null);
 
@@ -17,7 +21,7 @@ export default function AnalyzeTab() {
     setReportError(null);
     try {
       const { report_url } = await api.getProfileReport();
-      setReportUrl(report_url);
+      onReportUrlChange(report_url);
     } catch (err: unknown) {
       setReportError(err instanceof Error ? err.message : "Failed to generate report.");
     } finally {
@@ -30,7 +34,7 @@ export default function AnalyzeTab() {
     setCorrError(null);
     try {
       const { img_base64 } = await api.getCorrelationMatrix();
-      setCorrImg(img_base64);
+      onCorrImgChange(img_base64);
     } catch (err: unknown) {
       setCorrError(err instanceof Error ? err.message : "Failed to generate correlation matrix.");
     } finally {
@@ -55,7 +59,7 @@ export default function AnalyzeTab() {
           onClick={handleCorrelationMatrix}
           disabled={corrLoading}
         >
-          {corrLoading ? "Generating…" : corrImg ? "Regenerate" : "Show Correlation Matrix"}
+          {corrLoading ? "Generating…" : corrImg ? "Refresh Correlation Matrix" : "Show Correlation Matrix"}
         </button>
 
         {corrError && <p className="error-msg">⚠ {corrError}</p>}
@@ -83,7 +87,7 @@ export default function AnalyzeTab() {
           onClick={handleGenerateReport}
           disabled={isGenerating}
         >
-          {isGenerating ? "Generating report…" : reportUrl ? "Regenerate Report" : "Generate Profile Report"}
+          {isGenerating ? "Generating report…" : reportUrl ? "Refresh Profile Report" : "Generate Profile Report"}
         </button>
 
         {isGenerating && (

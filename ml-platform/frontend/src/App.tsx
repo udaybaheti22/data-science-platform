@@ -17,6 +17,8 @@ function App() {
   const [colCount, setColCount] = useState<number | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestionResponse | null>(null);
+  const [corrImg, setCorrImg] = useState<string | null>(null);
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
 
   const isTabEnabled = (tab: TabId): boolean => {
     if (tab === "upload") return true;
@@ -34,11 +36,17 @@ function App() {
     setColCount(newCols);
     setColumns(newColumns);
     setIsLoaded(true);
+    // Reset analyze cache — new dataset means old results are stale
+    setCorrImg(null);
+    setReportUrl(null);
   }
 
   function handleColumnsChange(newColumns: string[], newRowCount?: number) {
     setColumns(newColumns);
     if (newRowCount !== undefined) setRowCount(newRowCount);
+    // Reset analyze cache — cleaning changed the dataset
+    setCorrImg(null);
+    setReportUrl(null);
   }
 
   function handleClearDataset() {
@@ -48,6 +56,8 @@ function App() {
     setColCount(null);
     setColumns([]);
     setAiSuggestions(null);
+    setCorrImg(null);
+    setReportUrl(null);
     setActiveTab("upload");
   }
 
@@ -79,7 +89,14 @@ function App() {
           />
         );
       case "analyze":
-        return <AnalyzeTab />;
+        return (
+          <AnalyzeTab
+            corrImg={corrImg}
+            reportUrl={reportUrl}
+            onCorrImgChange={setCorrImg}
+            onReportUrlChange={setReportUrl}
+          />
+        );
       case "model":
         return <ModelTab columns={columns} aiSuggestions={aiSuggestions} />;
       case "suggest":
