@@ -23,12 +23,15 @@ from pydantic import BaseModel
 _origins_env = os.getenv("CORS_ORIGINS", "")
 cors_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
 
+# If CORS_ORIGINS is set to "*" or left empty, allow all origins
+allow_all_origins = not cors_origins or cors_origins == ["*"]
+
 app = FastAPI(title="ML Platform API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all_origins else cors_origins,
+    allow_credentials=False if allow_all_origins else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -996,16 +999,42 @@ Focus on:
 
 Return structured JSON matching the schema exactly."""
 
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=AISuggestionResult,
-            ),
-        )
-
         import json
+        import time
+
+        # Model fallback list — try primary first, fall back on 503/429
+        model_candidates = ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-2.0-flash-lite"]
+        response = None
+        last_error = None
+
+        for model_name in model_candidates:
+            for attempt in range(2):  # 2 attempts per model before moving to next
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=AISuggestionResult,
+                        ),
+                    )
+                    logger.info(f"Gemini responded OK with model: {model_name}")
+                    break  # success
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e)
+                    is_transient = any(code in err_str for code in ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED"])
+                    if is_transient and attempt == 0:
+                        logger.warning(f"Gemini {model_name} attempt 1 failed ({err_str[:60]}), retrying in 2s...")
+                        time.sleep(2)
+                    else:
+                        logger.warning(f"Gemini {model_name} failed, trying next model...")
+                        break  # move to next model
+            if response is not None:
+                break  # got a response, stop trying models
+
+        if response is None:
+            raise last_error
         parsed = json.loads(response.text)
 
         # Strip None hyperparameter fields so the frontend only sees relevant ones
