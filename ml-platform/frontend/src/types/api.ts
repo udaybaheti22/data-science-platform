@@ -92,4 +92,28 @@ export interface KNNPayload {
   metric: string;
 }
 
-export type TabId = "upload" | "clean" | "analyze" | "model" | "export";
+export type TabId = "upload" | "clean" | "analyze" | "model" | "export" | "suggest";
+
+export interface ColumnSuggestion {
+  column: string;
+  action: string;
+  reason: string;
+}
+
+export interface ModelSuggestion {
+  recommended_model: string;
+  hyperparameters: Record<string, unknown>;
+}
+
+export interface AISuggestionResponse {
+  summary_text: string;
+  target_column: string;
+  task_type: "regression" | "classification";
+  column_suggestions: ColumnSuggestion[];
+  model_suggestions: ModelSuggestion;
+}
+
+export interface AISuggestPayload {
+  target_column: string;
+  task_type: string;
+}

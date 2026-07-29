@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
 import PreviewTable from "../components/PreviewTable";
-import type { MissingSummaryItem, PreviewResponse } from "../types/api";
+import type { MissingSummaryItem, PreviewResponse, AISuggestionResponse } from "../types/api";
 import "../styles/clean.css";
 
 type Operation =
@@ -18,9 +18,10 @@ interface CleanTabProps {
   columns: string[];
   rowCount: number | null;
   onColumnsChange: (columns: string[], rowCount?: number) => void;
+  aiSuggestions: AISuggestionResponse | null;
 }
 
-export default function CleanTab({ columns, rowCount, onColumnsChange }: CleanTabProps) {
+export default function CleanTab({ columns, rowCount, onColumnsChange, aiSuggestions }: CleanTabProps) {
   const [selectedOp, setSelectedOp] = useState<Operation>("fill_missing");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +121,22 @@ export default function CleanTab({ columns, rowCount, onColumnsChange }: CleanTa
   const needsSingleCol = ["fill_missing", "change_type", "rename_column"].includes(selectedOp);
   const needsMultiCol = ["drop_columns", "one_hot_encode", "label_encode"].includes(selectedOp);
 
+  // AI hint for the currently selected single column
+  function getSingleColHint(): { action: string; reason: string } | null {
+    if (!aiSuggestions || !selectedColumn) return null;
+    return aiSuggestions.column_suggestions.find((s) => s.column === selectedColumn) ?? null;
+  }
+
+  // AI hints for multi-select: show hints for all currently selected columns
+  function getMultiColHints(): { column: string; action: string; reason: string }[] {
+    if (!aiSuggestions) return [];
+    const targets = selectedColumns.length > 0 ? selectedColumns : [];
+    return aiSuggestions.column_suggestions.filter((s) => targets.includes(s.column));
+  }
+
+  const singleColHint = getSingleColHint();
+  const multiColHints = getMultiColHints();
+
   return (
     <div className="clean-tab">
       <h2>Clean Dataset</h2>
@@ -161,6 +178,22 @@ export default function CleanTab({ columns, rowCount, onColumnsChange }: CleanTa
 
         {/* Right: operation form */}
         <section className="clean-main">
+          {/* AI suggestions overview — shown whenever suggestions exist */}
+          {aiSuggestions && aiSuggestions.column_suggestions.length > 0 && (
+            <div className="ai-suggestions-panel">
+              <p className="ai-panel-title">💡 AI Suggestions</p>
+              <ul className="ai-suggestion-list">
+                {aiSuggestions.column_suggestions.map((s, i) => (
+                  <li key={i} className="ai-suggestion-item">
+                    <span className="ai-col-name">{s.column}</span>
+                    <span className="ai-action-tag">{s.action.replace(/_/g, " ")}</span>
+                    <span className="ai-reason">{s.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <form className="clean-form" onSubmit={handleApply}>
             <div className="form-group">
               <label htmlFor="op-select">Operation</label>
@@ -191,6 +224,12 @@ export default function CleanTab({ columns, rowCount, onColumnsChange }: CleanTa
                 >
                   {columns.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
+                {singleColHint && (
+                  <div className="ai-hint">
+                    <span className="ai-hint-action">{singleColHint.action.replace(/_/g, " ")}</span>
+                    <span className="ai-hint-reason">{singleColHint.reason}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -208,6 +247,17 @@ export default function CleanTab({ columns, rowCount, onColumnsChange }: CleanTa
                 >
                   {columns.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
+                {multiColHints.length > 0 && (
+                  <div className="ai-hint-multi">
+                    {multiColHints.map((h, i) => (
+                      <div key={i} className="ai-hint">
+                        <span className="ai-hint-col">{h.column}:</span>
+                        <span className="ai-hint-action">{h.action.replace(/_/g, " ")}</span>
+                        <span className="ai-hint-reason">{h.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

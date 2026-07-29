@@ -116,6 +116,11 @@ class KNNRequest(BaseModel):
     metric: str = "euclidean"
 
 
+class AISuggestRequest(BaseModel):
+    target_column: str
+    task_type: str  # "regression" or "classification"
+
+
 # ---------------------------------------------------------------------------
 # POST /api/upload
 # ---------------------------------------------------------------------------
@@ -843,6 +848,188 @@ def train_knn(request: KNNRequest):
         "viz_base64": viz,
         "tree_base64": None,
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /api/suggest — AI-powered suggestions using Gemini
+# ---------------------------------------------------------------------------
+
+@app.post("/api/suggest")
+def get_ai_suggestions(request: AISuggestRequest):
+    """
+    Generate AI suggestions for data cleaning and model selection using Gemini.
+    Returns structured JSON with column_suggestions and model_suggestions.
+    """
+    main_df = data_store["main_df"]
+    if main_df is None:
+        raise HTTPException(status_code=404, detail="No dataset found. Please upload a file first.")
+
+    target_column = request.target_column
+    task_type = request.task_type.lower()
+
+    if target_column not in main_df.columns:
+        raise HTTPException(status_code=404, detail=f"Target column '{target_column}' not found.")
+
+    if task_type not in ("regression", "classification"):
+        raise HTTPException(status_code=400, detail="task_type must be 'regression' or 'classification'.")
+
+    # Build compact dataset profile
+    profile_lines = []
+    profile_lines.append(f"Dataset: {len(main_df)} rows × {len(main_df.columns)} columns")
+    profile_lines.append(f"Target column: {target_column}")
+    profile_lines.append(f"Task type: {task_type}")
+    profile_lines.append("")
+    profile_lines.append("Column profiles:")
+
+    for col in main_df.columns:
+        dtype = str(main_df[col].dtype)
+        null_pct = (main_df[col].isnull().sum() / len(main_df)) * 100
+        unique_count = main_df[col].nunique()
+
+        line = f"- {col}: dtype={dtype}, null={null_pct:.1f}%, unique={unique_count}"
+
+        if pd.api.types.is_numeric_dtype(main_df[col]):
+            non_null = main_df[col].dropna()
+            if len(non_null) > 0:
+                line += f", min={non_null.min():.2f}, max={non_null.max():.2f}"
+        else:
+            top_vals = main_df[col].value_counts().head(5).to_dict()
+            line += f", top_5={list(top_vals.keys())}"
+
+        profile_lines.append(line)
+
+    # Compute correlation with target (encode target if classification)
+    profile_lines.append("")
+    profile_lines.append(f"Pearson correlation with target '{target_column}':")
+
+    try:
+        if task_type == "classification":
+            # Label encode target temporarily for correlation
+            target_encoded = main_df[target_column].astype("category").cat.codes
+        else:
+            target_encoded = main_df[target_column]
+
+        for col in main_df.columns:
+            if col == target_column:
+                continue
+            if pd.api.types.is_numeric_dtype(main_df[col]):
+                non_null_mask = main_df[col].notna() & target_encoded.notna()
+                if non_null_mask.sum() > 1:
+                    corr = main_df.loc[non_null_mask, col].corr(target_encoded[non_null_mask])
+                    profile_lines.append(f"- {col}: {corr:.3f}")
+    except Exception:
+        profile_lines.append("(correlation computation failed)")
+
+    dataset_profile = "\n".join(profile_lines)
+
+    # Call Gemini API with structured output
+    try:
+        from google import genai
+        from google.genai import types
+        from pydantic import BaseModel as PydanticBaseModel
+        from typing import List
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=500,
+                detail="GEMINI_API_KEY environment variable not set.",
+            )
+
+        from typing import Optional as Opt
+
+        # Pydantic models for structured output (google-genai SDK)
+        # NOTE: No dict/additionalProperties — Developer API doesn't support it.
+        # All hyperparameter fields are optional so they work across all 3 models.
+        class ColumnSuggestion(PydanticBaseModel):
+            column: str
+            action: str
+            reason: str
+
+        class SuggestedHyperparameters(PydanticBaseModel):
+            # linear_regression
+            fit_intercept: Opt[bool] = None
+            # decision_tree
+            max_depth: Opt[int] = None
+            min_samples_split: Opt[int] = None
+            criterion: Opt[str] = None
+            # knn
+            n_neighbors: Opt[int] = None
+            weights: Opt[str] = None
+            metric: Opt[str] = None
+            # shared
+            test_size: Opt[float] = None
+
+        class ModelSuggestions(PydanticBaseModel):
+            recommended_model: str
+            hyperparameters: SuggestedHyperparameters
+
+        class AISuggestionResult(PydanticBaseModel):
+            summary_text: str
+            target_column: str
+            task_type: str
+            column_suggestions: List[ColumnSuggestion]
+            model_suggestions: ModelSuggestions
+
+        client = genai.Client(api_key=api_key)
+
+        prompt = f"""You are an expert data scientist analyzing a dataset for machine learning.
+
+Dataset Profile:
+{dataset_profile}
+
+Task: Provide actionable suggestions for data cleaning and model selection.
+
+CRITICAL CONSTRAINTS:
+1. For column_suggestions, ONLY use these actions: fill_missing, drop_rows_with_missing, drop_columns, one_hot_encode, label_encode, change_type, rename_column, remove_duplicates
+2. For model_suggestions.recommended_model, ONLY use: linear_regression, decision_tree, knn
+3. For hyperparameters, ONLY include parameters that exist for that model:
+   - linear_regression: fit_intercept (bool), test_size (0.1-0.5)
+   - decision_tree: max_depth (int or null), min_samples_split (int >= 2), criterion (gini/entropy for classification OR squared_error/absolute_error for regression), test_size (0.1-0.5)
+   - knn: n_neighbors (int >= 1), weights (uniform or distance), metric (euclidean, manhattan, or minkowski), test_size (0.1-0.5)
+
+Focus on:
+- Columns with high null % that need filling or dropping
+- Text columns (dtype=object) that need encoding before ML
+- Highly correlated features for the selected model
+- Reasonable hyperparameter defaults (e.g., test_size around 0.2, n_neighbors between 3-7, max_depth between 3-10 or null)
+
+Return structured JSON matching the schema exactly."""
+
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=AISuggestionResult,
+            ),
+        )
+
+        import json
+        parsed = json.loads(response.text)
+
+        # Strip None hyperparameter fields so the frontend only sees relevant ones
+        if "model_suggestions" in parsed and "hyperparameters" in parsed["model_suggestions"]:
+            parsed["model_suggestions"]["hyperparameters"] = {
+                k: v for k, v in parsed["model_suggestions"]["hyperparameters"].items()
+                if v is not None
+            }
+
+        log_action("ai_suggest", {"target": target_column, "task_type": task_type})
+
+        return parsed
+
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="google-genai package not installed. Run: pip install google-genai",
+        )
+    except Exception as e:
+        logger.error(f"Gemini API error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI suggestion generation failed: {str(e)}",
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,8 @@ import CleanTab from "./tabs/CleanTab";
 import AnalyzeTab from "./tabs/AnalyzeTab";
 import ModelTab from "./tabs/ModelTab";
 import ExportTab from "./tabs/ExportTab";
-import type { TabId } from "./types/api";
+import SuggestTab from "./tabs/SuggestTab";
+import type { TabId, AISuggestionResponse } from "./types/api";
 import "./styles/global.css";
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
   const [rowCount, setRowCount] = useState<number | null>(null);
   const [colCount, setColCount] = useState<number | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestionResponse | null>(null);
 
   const isTabEnabled = (tab: TabId): boolean => {
     if (tab === "upload") return true;
@@ -45,7 +47,12 @@ function App() {
     setRowCount(null);
     setColCount(null);
     setColumns([]);
+    setAiSuggestions(null);
     setActiveTab("upload");
+  }
+
+  function handleSuggestionsGenerated(suggestions: AISuggestionResponse) {
+    setAiSuggestions(suggestions);
   }
 
   function renderTab() {
@@ -68,12 +75,21 @@ function App() {
             columns={columns}
             rowCount={rowCount}
             onColumnsChange={handleColumnsChange}
+            aiSuggestions={aiSuggestions}
           />
         );
       case "analyze":
         return <AnalyzeTab />;
       case "model":
-        return <ModelTab columns={columns} />;
+        return <ModelTab columns={columns} aiSuggestions={aiSuggestions} />;
+      case "suggest":
+        return (
+          <SuggestTab
+            columns={columns}
+            aiSuggestions={aiSuggestions}
+            onSuggestionsGenerated={handleSuggestionsGenerated}
+          />
+        );
       case "export":
         return <ExportTab />;
       default:

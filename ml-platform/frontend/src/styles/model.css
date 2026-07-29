@@ -131,3 +131,15 @@
   color: #b45309;
   margin-top: 6px;
 }
+
+.ai-hint {
+  display: block;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #fff9e6;
+  border-left: 3px solid #f39c12;
+  color: #7f6d00;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  line-height: 1.4;
+}

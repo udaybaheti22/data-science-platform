@@ -11,6 +11,8 @@ import type {
   LinearRegressionPayload,
   DecisionTreePayload,
   KNNPayload,
+  AISuggestionResponse,
+  AISuggestPayload,
 } from "../types/api";
 
 const BASE_URL = import.meta.env.VITE_API_URL as string;
@@ -207,5 +209,19 @@ export const api = {
       throw new Error(data.detail || "Request failed");
     }
     return response.blob();
+  },
+
+  async getAISuggestions(payload: AISuggestPayload): Promise<AISuggestionResponse> {
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}/api/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      throw new Error("Could not connect to backend");
+    }
+    return handleResponse<AISuggestionResponse>(response);
   },
 };

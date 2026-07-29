@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { api } from "../api/client";
 import HyperparamPanel from "../components/HyperparamPanel";
-import type { TrainResponse, TrainMetricsRegression, TrainMetricsClassification } from "../types/api";
+import type { TrainResponse, TrainMetricsRegression, TrainMetricsClassification, AISuggestionResponse } from "../types/api";
 import "../styles/model.css";
 
 type ModelType = "linear_regression" | "decision_tree" | "knn";
 
 interface ModelTabProps {
   columns: string[];
+  aiSuggestions: AISuggestionResponse | null;
 }
 
 const DEFAULT_HYPERPARAMS: Record<ModelType, Record<string, unknown>> = {
@@ -16,7 +17,7 @@ const DEFAULT_HYPERPARAMS: Record<ModelType, Record<string, unknown>> = {
   knn: { n_neighbors: 5, weights: "uniform", metric: "euclidean", test_size: 0.2 },
 };
 
-export default function ModelTab({ columns }: ModelTabProps) {
+export default function ModelTab({ columns, aiSuggestions }: ModelTabProps) {
   const [modelType, setModelType] = useState<ModelType>("linear_regression");
   const [hyperparams, setHyperparams] = useState<Record<string, unknown>>(
     DEFAULT_HYPERPARAMS.linear_regression
@@ -94,6 +95,20 @@ export default function ModelTab({ columns }: ModelTabProps) {
     return "mse" in metrics;
   }
 
+  // Get AI hyperparameter suggestions if available
+  function getModelHint(): string | null {
+    if (!aiSuggestions) return null;
+    if (aiSuggestions.model_suggestions.recommended_model === modelType) {
+      const params = Object.entries(aiSuggestions.model_suggestions.hyperparameters)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(", ");
+      return `💡 AI recommends this model with: ${params}`;
+    }
+    return null;
+  }
+
+  const modelHint = getModelHint();
+
   return (
     <div className="model-tab">
       <h2>Train a Model</h2>
@@ -115,6 +130,7 @@ export default function ModelTab({ columns }: ModelTabProps) {
             <option value="decision_tree">Decision Tree</option>
             <option value="knn">K-Nearest Neighbours (KNN)</option>
           </select>
+          {modelHint && <small className="ai-hint">{modelHint}</small>}
         </div>
 
         <div className="form-group">

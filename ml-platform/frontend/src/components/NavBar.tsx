@@ -12,6 +12,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "clean", label: "Clean" },
   { id: "analyze", label: "Analyze" },
   { id: "model", label: "Model" },
+  { id: "suggest", label: "AI Suggestions" },
   { id: "export", label: "Export" },
 ];
 
