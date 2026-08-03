@@ -169,6 +169,79 @@ async def upload_file(file: UploadFile = File(...)):
 def health_check():
     return {"status": "ok"}
 
+
+# ---------------------------------------------------------------------------
+# GET /api/sample_datasets — list available sample datasets
+# POST /api/sample_datasets/{name} — load a sample dataset into data_store
+# ---------------------------------------------------------------------------
+
+SAMPLE_DATASETS_DIR = Path(__file__).parent / "sample_datasets"
+
+SAMPLE_DATASET_META = {
+    "house_prices": {
+        "filename": "house_prices.csv",
+        "label": "House Prices",
+        "model": "Linear Regression",
+        "description": "Boston housing data — predict median home value. Practice filling missing values, fixing column types, and removing duplicates.",
+        "target_hint": "MedianHomeValue",
+        "rows": 511,
+        "columns": 14,
+    },
+    "titanic": {
+        "filename": "titanic.csv",
+        "label": "Titanic Survival",
+        "model": "Decision Tree",
+        "description": "Titanic passenger data — predict survival. Practice encoding text columns, filling missing age values, and dropping irrelevant columns.",
+        "target_hint": "Survived",
+        "rows": 423,
+        "columns": 12,
+    },
+    "iris": {
+        "filename": "iris.csv",
+        "label": "Iris Flowers",
+        "model": "KNN",
+        "description": "Classic iris flower dataset — classify species. Practice fixing column types, filling missing values, and label encoding.",
+        "target_hint": "species",
+        "rows": 154,
+        "columns": 5,
+    },
+}
+
+
+@app.get("/api/sample_datasets")
+def list_sample_datasets():
+    return list(SAMPLE_DATASET_META.values()) + [{"name": k} | v for k, v in {}.items()]
+
+
+@app.post("/api/sample_datasets/{name}")
+def load_sample_dataset(name: str):
+    if name not in SAMPLE_DATASET_META:
+        raise HTTPException(status_code=404, detail=f"Sample dataset '{name}' not found.")
+
+    meta = SAMPLE_DATASET_META[name]
+    file_path = SAMPLE_DATASETS_DIR / meta["filename"]
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset file not found on server.")
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load dataset: {str(e)}")
+
+    data_store["original_df"] = df.copy()
+    data_store["main_df"] = df.copy()
+    data_store["logs"] = []
+
+    log_action("load_sample", {"name": name, "rows": len(df), "columns": len(df.columns)})
+
+    return {
+        "filename": meta["filename"],
+        "rows": len(df),
+        "columns": len(df.columns),
+        "column_list": list(df.columns),
+    }
+
 # ---------------------------------------------------------------------------
 # Preview — GET /api/data/preview
 # ---------------------------------------------------------------------------
@@ -996,6 +1069,11 @@ Focus on:
 - Text columns (dtype=object) that need encoding before ML
 - Highly correlated features for the selected model
 - Reasonable hyperparameter defaults (e.g., test_size around 0.2, n_neighbors between 3-7, max_depth between 3-10 or null)
+
+Model selection guidance:
+- Prefer `linear_regression` when task_type is regression and the target is a continuous numeric value
+- Prefer `decision_tree` when task_type is classification and there are mixed numeric/categorical features
+- Prefer `knn` when task_type is classification and all features are numeric with clear cluster structure
 
 Return structured JSON matching the schema exactly."""
 

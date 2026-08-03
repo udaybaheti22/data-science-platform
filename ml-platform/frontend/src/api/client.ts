@@ -13,6 +13,8 @@ import type {
   KNNPayload,
   AISuggestionResponse,
   AISuggestPayload,
+  SampleDatasetMeta,
+  LoadSampleResponse,
 } from "../types/api";
 
 const BASE_URL = import.meta.env.VITE_API_URL as string;
@@ -223,5 +225,27 @@ export const api = {
       throw new Error("Could not connect to backend");
     }
     return handleResponse<AISuggestionResponse>(response);
+  },
+
+  async getSampleDatasets(): Promise<SampleDatasetMeta[]> {
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}/api/sample_datasets`);
+    } catch {
+      throw new Error("Could not connect to backend");
+    }
+    return handleResponse<SampleDatasetMeta[]>(response);
+  },
+
+  async loadSampleDataset(name: string): Promise<LoadSampleResponse> {
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}/api/sample_datasets/${name}`, {
+        method: "POST",
+      });
+    } catch {
+      throw new Error("Could not connect to backend");
+    }
+    return handleResponse<LoadSampleResponse>(response);
   },
 };

@@ -14,6 +14,39 @@ interface UploadTabProps {
   onColumnsChange: (columns: string[], rowCount?: number) => void;
 }
 
+const SAMPLE_DATASETS = [
+  {
+    name: "house_prices",
+    label: "House Prices",
+    forModel: "For Linear Regression",
+    description: "Predict median home value. Practice filling missing values, fixing column types, and removing duplicates.",
+    target: "MedianHomeValue",
+    rows: 511,
+    cols: 14,
+    badge: "regression",
+  },
+  {
+    name: "titanic",
+    label: "Titanic Survival",
+    forModel: "For Decision Tree",
+    description: "Predict passenger survival. Practice label encoding, filling missing age values, and dropping irrelevant columns.",
+    target: "Survived",
+    rows: 423,
+    cols: 12,
+    badge: "classification",
+  },
+  {
+    name: "iris",
+    label: "Iris Flowers",
+    forModel: "For KNN",
+    description: "Classify flower species. Practice fixing column types, filling missing values, and label encoding.",
+    target: "species",
+    rows: 154,
+    cols: 5,
+    badge: "classification",
+  },
+];
+
 export default function UploadTab({
   isLoaded,
   filename,
@@ -28,6 +61,7 @@ export default function UploadTab({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [assignHeaderLoading, setAssignHeaderLoading] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState<string | null>(null);
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +103,31 @@ export default function UploadTab({
       setError(err instanceof Error ? err.message : "Failed to assign header.");
     } finally {
       setAssignHeaderLoading(false);
+    }
+  }
+
+  async function handleLoadSample(name: string) {
+    if (isLoaded) {
+      const confirmed = window.confirm(
+        "Loading a sample dataset will replace your current dataset and all cleaning progress. Continue?"
+      );
+      if (!confirmed) return;
+      onClearDataset();
+    }
+
+    setSampleLoading(name);
+    setError(null);
+    setPreview(null);
+
+    try {
+      const result = await api.loadSampleDataset(name);
+      const previewData = await api.getPreview();
+      setPreview(previewData);
+      onUploadSuccess(result.filename, result.rows, result.columns, result.column_list);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load sample dataset.");
+    } finally {
+      setSampleLoading(null);
     }
   }
 
@@ -127,6 +186,44 @@ export default function UploadTab({
           <p>No dataset loaded. Upload a CSV file to get started.</p>
         </div>
       )}
+
+      {/* Sample datasets section */}
+      <div className="sample-datasets-section">
+        <div className="sample-datasets-header">
+          <h3>Don't have your own dataset?</h3>
+          <p>Try one of these sample datasets — each is pre-loaded with missing values, wrong column types, and duplicates for you to clean and explore.</p>
+        </div>
+
+        <div className="sample-cards">
+          {SAMPLE_DATASETS.map((ds) => (
+            <div key={ds.name} className="sample-card">
+              <div className="sample-card-top">
+                <span className="sample-for-label">{ds.forModel}</span>
+                <span className={`sample-badge sample-badge--${ds.badge}`}>{ds.badge}</span>
+              </div>
+
+              <h4 className="sample-card-title">{ds.label}</h4>
+              <p className="sample-card-desc">{ds.description}</p>
+
+              <div className="sample-card-meta">
+                <span>{ds.rows} rows</span>
+                <span>·</span>
+                <span>{ds.cols} columns</span>
+                <span>·</span>
+                <span>Target: <code>{ds.target}</code></span>
+              </div>
+
+              <button
+                className="btn btn-secondary sample-use-btn"
+                onClick={() => handleLoadSample(ds.name)}
+                disabled={sampleLoading === ds.name}
+              >
+                {sampleLoading === ds.name ? "Loading…" : "Use this dataset"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

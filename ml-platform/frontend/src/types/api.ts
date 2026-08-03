@@ -117,3 +117,20 @@ export interface AISuggestPayload {
   target_column: string;
   task_type: string;
 }
+
+export interface SampleDatasetMeta {
+  filename: string;
+  label: string;
+  model: string;
+  description: string;
+  target_hint: string;
+  rows: number;
+  columns: number;
+}
+
+export interface LoadSampleResponse {
+  filename: string;
+  rows: number;
+  columns: number;
+  column_list: string[];
+}

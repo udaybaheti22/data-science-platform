@@ -117,7 +117,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>ML Platform</h1>
+        <h1>Data Science Platform</h1>
         {isLoaded && filename && (
           <span className="header-file-info">
             📄 {filename} — {rowCount} rows × {colCount} cols

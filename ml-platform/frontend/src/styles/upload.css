@@ -1,6 +1,10 @@
 .upload-tab {}
 
-.upload-form { margin-bottom: 16px; }
+.upload-form {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: center;
+}
 
 .file-input-row {
   display: flex;
@@ -61,3 +65,121 @@
   gap: 12px;
 }
 .assign-header-section small { color: var(--color-muted); font-size: .82rem; }
+
+/* ── Sample datasets section ── */
+
+.sample-datasets-section {
+  margin-top: 3rem;
+  border-top: 2px solid var(--color-border);
+  padding-top: 2rem;
+}
+
+.sample-datasets-header {
+  margin-bottom: 1.5rem;
+}
+
+.sample-datasets-header h3 {
+  font-size: 1.2rem;
+  color: #2c3e50;
+  margin: 0 0 0.4rem 0;
+}
+
+.sample-datasets-header p {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.sample-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .sample-cards { grid-template-columns: 1fr; }
+}
+
+.sample-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.sample-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.sample-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sample-for-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-primary);
+}
+
+.sample-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+  text-transform: capitalize;
+}
+
+.sample-badge--regression {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.sample-badge--classification {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sample-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #1e293b;
+}
+
+.sample-card-desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.sample-card-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.sample-card-meta code {
+  background: #f1f5f9;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.sample-use-btn {
+  margin-top: auto;
+  width: 100%;
+}
